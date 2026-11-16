@@ -3,7 +3,7 @@
  * 시연 시나리오(9.1) 흐름을 HTTP 로 끝까지 확인한다. 끝나면 스키마를 지운다.
  * TEST_DATABASE_URL 이 없으면 건너뛴다. (Neon 은 pooler 가 아닌 direct 주소 사용)
  */
-import 'dotenv/config';
+import '@dotenvx/dotenvx/config';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';

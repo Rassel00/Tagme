@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '@dotenvx/dotenvx/config';
 import path from 'node:path';
 
 function optional(name: string): string | undefined {
