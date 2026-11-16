@@ -17,6 +17,8 @@ export const config = {
   gatewayKey: optional('GATEWAY_KEY'),
   gatewayPhone: optional('GATEWAY_PHONE'),
   aedApiKey: optional('AED_API_KEY'),
+  /** 카카오맵 JavaScript 키. 브라우저에 그대로 노출되는 공개 키이며, 카카오 콘솔에 등록한 도메인에서만 동작한다 */
+  kakaoJsKey: optional('KAKAO_JS_KEY'),
   /** Firebase 서비스 계정 키 JSON (한 줄). 없으면 앱 API 인증이 동작하지 않는다. */
   firebaseServiceAccount: optional('FIREBASE_SERVICE_ACCOUNT'),
   /** npm 스크립트와 Render 모두 server/ 를 작업 디렉터리로 실행한다. */

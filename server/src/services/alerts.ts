@@ -4,7 +4,7 @@ import type { AccessStatus } from '../domain/constants.js';
 import { LIMITS } from '../domain/constants.js';
 import { renderGuardianSms } from '../domain/sms-template.js';
 import { generateToken, hashToken } from '../lib/ids.js';
-import { findProfile } from '../repos/profiles.js';
+import { findPersonForTag } from '../repos/persons.js';
 
 export interface AlertRow {
   id: string;
@@ -62,13 +62,15 @@ export async function notifyGuardians(
   tag: { id: string; userId: string; defaultMessage: string },
   now: Date,
 ): Promise<number> {
+  // 주소록을 참조하므로 보호자가 번호를 고치면 바로 새 번호로 보낸다
   const { rows: contacts } = await client.query<{ id: string; phone: string; message: string | null }>(
-    'SELECT id, phone, message FROM contacts WHERE tag_id = $1 ORDER BY sort_order',
+    `SELECT c.id, c.phone, tc.message FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
+     WHERE tc.tag_id = $1 ORDER BY tc.sort_order`,
     [tag.id],
   );
   if (contacts.length === 0) return 0;
 
-  const profile = await findProfile(client, tag.userId);
+  const person = await findPersonForTag(client, tag.id);
   const expiresAt = new Date(alert.createdAt.getTime() + LIMITS.alertLifetimeHours * 3_600_000);
 
   for (const contact of contacts) {
@@ -78,7 +80,7 @@ export async function notifyGuardians(
       [alert.id, contact.id, hashToken(token), expiresAt],
     );
     const body = renderGuardianSms({
-      userName: profile?.name ?? '',
+      userName: person?.name ?? '',
       message: contact.message ?? tag.defaultMessage,
       lat: alert.lat,
       lng: alert.lng,

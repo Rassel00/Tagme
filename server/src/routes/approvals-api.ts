@@ -43,7 +43,7 @@ function assertUsable(approval: ApprovalRow, alert: AlertRow, now: Date): void {
 
 async function buildView(approval: ApprovalRow, alert: AlertRow, now: Date) {
   const { rows } = await getPool().query<{ name: string | null; label: string }>(
-    `SELECT p.name, t.label FROM tags t LEFT JOIN profiles p ON p.user_id = t.user_id WHERE t.id = $1`,
+    `SELECT p.name, t.label FROM tags t LEFT JOIN persons p ON p.id = t.person_id WHERE t.id = $1`,
     [alert.tagId],
   );
   const info = rows[0];

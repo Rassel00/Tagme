@@ -125,8 +125,11 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.equal(again.json.agreed.length, REQUIRED_CONSENT_TYPES.length);
   });
 
-  it('응급정보 저장 (혈액형·알레르기만 공개)', async () => {
-    const saved = await call('PUT', '/api/profile', {
+  let personId = '';
+  let contactIds: string[] = [];
+
+  it('대상자 등록 (혈액형·알레르기만 공개), 이름 필수·잘못된 공개 항목 400', async () => {
+    const saved = await call('POST', '/api/persons', {
       token: owner,
       body: {
         name: '김지우',
@@ -139,51 +142,78 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
         publicFields: ['bloodType', 'allergies'],
       },
     });
-    assert.equal(saved.status, 200);
+    assert.equal(saved.status, 201);
     assert.equal(saved.json.birthDate, '2003-05-14');
-    assert.equal((await call('PUT', '/api/profile', { token: owner, body: { publicFields: ['phone'] } })).status, 400);
+    personId = saved.json.personId;
+    assert.equal((await call('POST', '/api/persons', { token: owner, body: { name: '' } })).status, 400);
+    assert.equal(
+      (await call('POST', '/api/persons', { token: owner, body: { name: 'x', publicFields: ['phone'] } })).status,
+      400,
+    );
+    const list = await call('GET', '/api/persons', { token: owner });
+    assert.equal(list.json.length, 1);
+    assert.equal(list.json[0].tagCount, 0);
   });
 
-  it('태그 생성·연락처 설정 (최대 3명, 소유자만)', async () => {
-    const created = await call('POST', '/api/tags', { token: owner, body: { label: '키링' } });
+  it('주소록 연락처 등록', async () => {
+    for (const [name, phone] of [['엄마', '010-1111-2222'], ['민수', PHONES[1]!], ['이모', '01055556666']]) {
+      const res = await call('POST', '/api/contacts', { token: owner, body: { name, relation: '가족', phone } });
+      assert.equal(res.status, 201);
+      contactIds.push(res.json.contactId);
+    }
+    assert.equal((await call('POST', '/api/contacts', { token: owner, body: { name: 'x', phone: '02-123' } })).status, 400);
+  });
+
+  it('태그 추가: 대상자·연락처(최대 3명)를 함께 저장, 소유자만', async () => {
+    const tooMany = await call('POST', '/api/tags', {
+      token: owner,
+      body: { label: '키링', personId, contactIds: [...contactIds, contactIds[0]] },
+    });
+    assert.equal(tooMany.status, 400);
+
+    const created = await call('POST', '/api/tags', {
+      token: owner,
+      body: {
+        label: '키링',
+        personId,
+        defaultMessage: '긴급상황입니다. 위치 확인 부탁드립니다',
+        contactIds: contactIds.slice(0, 2),
+      },
+    });
     assert.equal(created.status, 201);
     tagId = created.json.tagId;
     assert.match(tagId, /^[0-9A-Za-z]{24}$/);
     assert.ok(created.json.url.endsWith(`/t/${tagId}`));
-
-    const contact = (i: number) => ({ name: `보호자${i}`, relation: '가족', phone: '010-1111-2222' });
-    const tooMany = await call('PUT', `/api/tags/${tagId}`, {
-      token: owner,
-      body: { contacts: [contact(1), contact(2), contact(3), contact(4)] },
-    });
-    assert.equal(tooMany.status, 400);
-
-    const updated = await call('PUT', `/api/tags/${tagId}`, {
-      token: owner,
-      body: {
-        defaultMessage: '긴급상황입니다. 위치 확인 부탁드립니다',
-        contacts: [
-          { name: '엄마', relation: '가족', phone: '010-1111-2222', message: '지우 응급 태그가 스캔됐어요' },
-          { name: '민수', relation: '친구', phone: PHONES[1] },
-        ],
-      },
-    });
-    assert.equal(updated.status, 200);
+    assert.equal(created.json.personName, '김지우');
     assert.deepEqual(
-      updated.json.contacts.map((c: { phone: string }) => c.phone),
+      created.json.contacts.map((c: { phone: string }) => c.phone),
       PHONES,
     );
 
-    // 다른 사용자는 존재 여부도 알 수 없게 404
+    // 다른 사용자: 남의 태그 404, 남의 대상자·연락처로 태그를 만들 수 없음
     await call('POST', '/api/consents', {
       token: stranger,
       body: { items: REQUIRED_CONSENT_TYPES.map((type) => ({ type, version: CONSENT_VERSION })) },
     });
     assert.equal((await call('GET', `/api/tags/${tagId}`, { token: stranger })).status, 404);
     assert.equal((await call('PUT', `/api/tags/${tagId}`, { token: stranger, body: { label: 'x' } })).status, 404);
+    assert.equal((await call('POST', '/api/tags', { token: stranger, body: { personId } })).status, 404);
+    assert.equal((await call('POST', '/api/tags', { token: stranger, body: { contactIds } })).status, 400);
+    assert.equal((await call('GET', '/api/tags', { token: stranger })).json.length, 0, '실패한 태그를 남기지 않음');
 
     const list = await call('GET', '/api/tags', { token: owner });
     assert.equal(list.json[0].contactCount, 2);
+    assert.equal((await call('GET', '/api/persons', { token: owner })).json[0].tagCount, 1);
+  });
+
+  it('주소록에서 번호를 고치면 태그에 바로 반영', async () => {
+    const res = await call('PUT', `/api/contacts/${contactIds[0]}`, {
+      token: owner,
+      body: { name: '엄마', relation: '가족', phone: PHONES[0] },
+    });
+    assert.equal(res.json.tagCount, 1);
+    const tag = await call('GET', `/api/tags/${tagId}`, { token: owner });
+    assert.equal(tag.json.contacts[0].phone, PHONES[0]);
   });
 
   it('공개 조회: 공개 항목만 값, 보호자 번호 비노출, 없는 태그 404', async () => {
@@ -227,7 +257,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     const list = jobs.json as unknown as { jobId: string; phone: string; body: string }[];
     assert.deepEqual(list.map((j) => j.phone).sort(), [...PHONES].sort());
     const mom = list.find((j) => j.phone === PHONES[0])!;
-    assert.match(mom.body, /^\[응급안심\] 김지우님 응급 태그가 스캔되었습니다\.\n지우 응급 태그가 스캔됐어요\n/);
+    assert.match(mom.body, /^\[응급안심\] 김지우님 응급 태그가 스캔되었습니다\.\n긴급상황입니다\. 위치 확인 부탁드립니다\n/);
     assert.match(mom.body, /위치: https:\/\/maps\.google\.com\/\?q=37\.293900,126\.974400/);
     const other = list.find((j) => j.phone === PHONES[1])!;
     assert.match(other.body, /긴급상황입니다\. 위치 확인 부탁드립니다/);
@@ -391,6 +421,23 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
       `SELECT count(*)::int AS n FROM sms_jobs WHERE status = 'failed' AND error = 'gateway_timeout'`,
     );
     assert.equal(rows[0].n, 2);
+  });
+
+  it('주변 AED: 가까운 순, 거리(m), 좌표 범위 밖은 400', async () => {
+    await pool.query(
+      `INSERT INTO aeds (id, name, place, address, lat, lng) VALUES
+         ('a1', '중앙도서관', '1층 로비', '경기 수원시', 37.2944, 126.9759),
+         ('a2', '학생회관', '안내데스크 옆', '경기 수원시', 37.2925, 126.9725),
+         ('far', '부산역', '대합실', '부산', 35.1151, 129.0422)`,
+    );
+    const res = await call('GET', '/api/public/aeds?lat=37.2939&lng=126.9744&limit=5');
+    assert.equal(res.status, 200);
+    assert.deepEqual(
+      res.json.map((a: { name: string }) => a.name),
+      ['중앙도서관', '학생회관'],
+    );
+    assert.ok(res.json[0].distanceM > 100 && res.json[0].distanceM < 200);
+    assert.equal((await call('GET', '/api/public/aeds?lat=0&lng=0')).status, 400);
   });
 
   it('비활성 태그는 410, 신고도 불가', async () => {

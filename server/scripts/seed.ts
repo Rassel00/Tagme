@@ -33,11 +33,11 @@ async function main(): Promise<void> {
       ]);
     }
 
-    // 시나리오 9.1: 혈액형·알레르기만 공개
-    await client.query(
-      `INSERT INTO profiles
+    // 보호 대상자 (시나리오 9.1: 혈액형·알레르기만 공개)
+    const person = await client.query<{ id: string }>(
+      `INSERT INTO persons
          (user_id, name, birth_date, blood_type, conditions, allergies, medications, notes, public_fields)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
       [
         SEED_USER_ID,
         '김지우',
@@ -50,33 +50,39 @@ async function main(): Promise<void> {
         ['bloodType', 'allergies'],
       ],
     );
+    const personId = person.rows[0]!.id;
 
     const tag = await client.query<{ id: string }>(
-      `INSERT INTO tags (public_id, user_id, label, default_message, nfc_written_at)
-       VALUES ($1, $2, '키링', '긴급상황입니다. 위치 확인 부탁드립니다', now())
+      `INSERT INTO tags (public_id, user_id, person_id, label, default_message, nfc_written_at)
+       VALUES ($1, $2, $3, '키링', '긴급상황입니다. 위치 확인 부탁드립니다', now())
        RETURNING id`,
-      [SEED_PUBLIC_ID, SEED_USER_ID],
+      [SEED_PUBLIC_ID, SEED_USER_ID, personId],
     );
     const tagId = tag.rows[0]!.id;
 
+    // 주소록 → 태그 연결
     const contacts = [
-      { name: '엄마', relation: '가족', message: '지우 응급 태그가 스캔됐어요' },
-      { name: '민수', relation: '친구', message: null },
+      { name: '엄마', relation: '가족' },
+      { name: '민수', relation: '친구' },
     ];
     for (const [index, contact] of contacts.entries()) {
       const phone = contactPhones[index];
       if (!phone) break;
-      await client.query(
-        `INSERT INTO contacts (tag_id, name, relation, phone, message, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [tagId, contact.name, contact.relation, phone, contact.message, index],
+      const saved = await client.query<{ id: string }>(
+        'INSERT INTO contacts (user_id, name, relation, phone) VALUES ($1, $2, $3, $4) RETURNING id',
+        [SEED_USER_ID, contact.name, contact.relation, phone],
       );
+      await client.query('INSERT INTO tag_contacts (tag_id, contact_id, sort_order) VALUES ($1, $2, $3)', [
+        tagId,
+        saved.rows[0]!.id,
+        index,
+      ]);
     }
 
     // 비활성 태그 안내 화면(410) 확인용
     await client.query(
-      `INSERT INTO tags (public_id, user_id, label, is_active) VALUES ($1, $2, '가방 (비활성)', false)`,
-      [SEED_INACTIVE_PUBLIC_ID, SEED_USER_ID],
+      `INSERT INTO tags (public_id, user_id, person_id, label, is_active) VALUES ($1, $2, $3, '가방 (비활성)', false)`,
+      [SEED_INACTIVE_PUBLIC_ID, SEED_USER_ID, personId],
     );
   });
 

@@ -1,4 +1,4 @@
-/** 응급정보 항목 키. profiles.public_fields 와 공개 API 의 키로 쓴다. */
+/** 응급정보 항목 키. persons.public_fields 와 공개 API 의 키로 쓴다. */
 export const PROFILE_FIELDS = [
   'name',
   'birthDate',

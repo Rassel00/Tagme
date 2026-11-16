@@ -19,7 +19,7 @@ import { param, readCookie } from '../lib/http.js';
 import { generateAlertCode, generateAlertId, generateToken, hashToken } from '../lib/ids.js';
 import { createRateLimiter } from '../lib/rate-limit.js';
 import { parseOrThrow, phoneSchema } from '../lib/validate.js';
-import { findProfile } from '../repos/profiles.js';
+import { findPersonForTag } from '../repos/persons.js';
 import { findAlert, notifyGuardians, type AlertRow } from '../services/alerts.js';
 
 export const ALERT_SESSION_COOKIE = 'alertSession';
@@ -63,6 +63,39 @@ const alertBody = z
 
 const rescuerPhoneBody = z.object({ rescuerPhone: phoneSchema });
 
+const aedQuery = z.object({
+  lat: z.coerce.number().min(33).max(39),
+  lng: z.coerce.number().min(124).max(132),
+  limit: z.coerce.number().int().min(1).max(30).default(10),
+});
+
+/** 현재 위치에서 가까운 AED (거리 m). 먼저 약 5km 안에서 찾고, 모자라면 약 20km 까지 넓힌다 */
+async function findNearbyAeds(lat: number, lng: number, limit: number) {
+  for (const deg of [0.05, 0.2]) {
+    const { rows } = await getPool().query<{
+      name: string;
+      place: string;
+      address: string;
+      lat: number;
+      lng: number;
+      distance_m: number;
+    }>(
+      `SELECT name, place, address, lat, lng,
+              round(6371000 * 2 * asin(sqrt(
+                power(sin(radians(lat - $1) / 2), 2) +
+                cos(radians($1)) * cos(radians(lat)) * power(sin(radians(lng - $2) / 2), 2))))::int AS distance_m
+       FROM aeds
+       WHERE lat BETWEEN $1 - $4 AND $1 + $4 AND lng BETWEEN $2 - $4 AND $2 + $4
+       ORDER BY distance_m LIMIT $3`,
+      [lat, lng, limit, deg],
+    );
+    if (rows.length >= limit || deg === 0.2) {
+      return rows.map((r) => ({ name: r.name, place: r.place, address: r.address, lat: r.lat, lng: r.lng, distanceM: r.distance_m }));
+    }
+  }
+  return [];
+}
+
 export function createPublicApiRouter(): Router {
   const router = Router();
   // tagId 를 바꿔가며 조회하는 것을 막기 위해 공개 조회는 IP당 분당 30회 (BE-08)
@@ -72,13 +105,24 @@ export function createPublicApiRouter(): Router {
     key: (req) => req.ip ?? 'unknown',
   });
 
+  // 웹 화면용 공개 설정. 카카오맵 JS 키는 등록 도메인에서만 동작하는 공개 키라 내려줘도 된다
+  router.get('/config', (_req, res) => {
+    res.json({ kakaoJsKey: config.kakaoJsKey ?? null });
+  });
+
+  // 주변 AED 가까운 순 (WEB-06). 앱의 "주변 AED 찾기"도 /aed 웹 페이지로 이 API 를 쓴다
+  router.get('/aeds', lookupLimiter, async (req, res) => {
+    const { lat, lng, limit } = parseOrThrow(aedQuery, req.query);
+    res.json(await findNearbyAeds(lat, lng, limit));
+  });
+
   // 공개 정보 + 잠긴 항목명 (BE-03)
   router.get('/tags/:tagId', lookupLimiter, async (req, res) => {
     const tag = await findActiveTag(param(req, 'tagId'));
-    const profile = await findProfile(getPool(), tag.userId);
-    const { rows } = await getPool().query<{ count: string }>('SELECT count(*) FROM contacts WHERE tag_id = $1', [tag.id]);
+    const person = await findPersonForTag(getPool(), tag.id);
+    const { rows } = await getPool().query<{ count: string }>('SELECT count(*) FROM tag_contacts WHERE tag_id = $1', [tag.id]);
     res.set('Cache-Control', 'no-store');
-    res.json({ ...toPublicView(profile), contactCount: Number(rows[0]?.count ?? 0) });
+    res.json({ ...toPublicView(person), contactCount: Number(rows[0]?.count ?? 0) });
   });
 
   // 신고 생성 또는 병합 (BE-04, 7.1)
@@ -124,12 +168,9 @@ export function createPublicApiRouter(): Router {
       code: alert.code,
     };
     if (status === 'approved') {
-      const { rows } = await getPool().query<{ userId: string }>('SELECT user_id AS "userId" FROM tags WHERE id = $1', [
-        alert.tagId,
-      ]);
-      const profile = rows[0] ? await findProfile(getPool(), rows[0].userId) : null;
+      const person = await findPersonForTag(getPool(), alert.tagId);
       response.approvedUntil = alert.approvedUntil?.toISOString();
-      response.emergencyInfo = toLockedValues(profile);
+      response.emergencyInfo = toLockedValues(person);
     }
     res.json(response);
   });

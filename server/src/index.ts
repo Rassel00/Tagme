@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { closePool, isDbConfigured } from './db.js';
+import { scheduleAedSync } from './services/aed-sync.js';
 
 const app = createApp();
 
@@ -8,6 +9,8 @@ const server = app.listen(config.port, () => {
   console.log(`[server] ${config.publicBaseUrl} (port ${config.port})`);
   if (!isDbConfigured()) {
     console.warn('[server] DATABASE_URL 미설정: /healthz 와 /t/demo 화면만 동작합니다.');
+  } else {
+    scheduleAedSync();
   }
 });
 
