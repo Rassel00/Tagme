@@ -5,6 +5,7 @@
 import { DEMO_TAG_ID, createApi } from './api.js';
 import { byId, h, icon, svg } from './dom.js';
 import { directionsUrl, formatDistance, getPosition } from './geo.js';
+import { loadKakaoMaps, renderKakaoAedMap } from './kakao-map.js';
 import { DEMO_POSITION } from './mock-api.js';
 import type { Aed, AlertAction, AlertStatus, LatLng, ProfileField, ProfileValues, PublicTag } from './types.js';
 import { ApiRequestError } from './types.js';
@@ -16,6 +17,8 @@ const AED_ALL_LIMIT = 20;
 
 const tagId = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] ?? '');
 const isDemo = tagId === DEMO_TAG_ID;
+/** /aed: 태그 없이 주변 AED 만 보는 페이지 (보호자 앱에서 연다) */
+const isAedOnly = location.pathname.replace(/\/+$/, '') === '/aed';
 const api = createApi(tagId);
 const alertStorageKey = `tagme:alert:${tagId}`;
 
@@ -391,8 +394,8 @@ async function loadAeds(): Promise<void> {
   try {
     const limit = state.aedMode === 'near' ? AED_NEAR_LIMIT : AED_ALL_LIMIT;
     const aeds = await api.getAeds(state.aedPosition, limit);
-    renderAedMap(state.aedPosition, aeds);
     renderAedList(aeds);
+    await showAedMap(state.aedPosition, aeds);
   } catch (error) {
     body.replaceChildren(
       h('div', { class: 'notice notice--error' }, icon('warn'), h('div', {}, h('strong', {}, 'AED 목록을 불러오지 못했어요'), errorMessage(error))),
@@ -406,7 +409,7 @@ function renderAedList(aeds: Aed[]): void {
     body.replaceChildren(h('p', { class: 'aed-hint' }, '주변에 등록된 AED가 없습니다.'));
     return;
   }
-  const items = aeds.map((aed) =>
+  const items = aeds.map((aed, index) =>
     h(
       'li',
       { class: 'aed-item' },
@@ -416,7 +419,12 @@ function renderAedList(aeds: Aed[]): void {
         h(
           'div',
           { class: 'aed-main' },
-          h('div', { class: 'aed-name' }, h('span', {}, aed.name), h('span', { class: 'aed-distance' }, formatDistance(aed.distanceM))),
+          h(
+            'div',
+            { class: 'aed-name' },
+            h('span', {}, h('span', { class: 'aed-no' }, String(index + 1)), aed.name),
+            h('span', { class: 'aed-distance' }, formatDistance(aed.distanceM)),
+          ),
           h('div', { class: 'aed-place' }, aed.place),
           h('div', { class: 'aed-address' }, aed.address),
         ),
@@ -425,6 +433,33 @@ function renderAedList(aeds: Aed[]): void {
     ),
   );
   body.replaceChildren(h('ul', { class: 'aed-list' }, ...items), h('p', { class: 'aed-hint' }, '항목을 누르면 지도 앱에서 길찾기가 열립니다.'));
+}
+
+let kakaoKeyPromise: Promise<string | null> | undefined;
+
+/** 서버 설정의 카카오맵 JavaScript 키 (없으면 null) */
+function kakaoKey(): Promise<string | null> {
+  kakaoKeyPromise ??= fetch('/api/public/config', { cache: 'no-store' })
+    .then((r) => (r.ok ? (r.json() as Promise<{ kakaoJsKey?: string | null }>) : {}))
+    .then((c: { kakaoJsKey?: string | null }) => c.kakaoJsKey ?? null)
+    .catch(() => null);
+  return kakaoKeyPromise;
+}
+
+/** 카카오맵으로 그리고, 키가 없거나 불러오지 못하면 약식 지도로 */
+async function showAedMap(center: LatLng, aeds: Aed[]): Promise<void> {
+  const container = byId('aed-map');
+  const key = await kakaoKey();
+  if (key && aeds.length > 0) {
+    try {
+      renderKakaoAedMap(await loadKakaoMaps(key), container, center, aeds);
+      return;
+    } catch (error) {
+      console.warn('[aed] 카카오맵 대신 약식 지도를 표시합니다.', error);
+    }
+  }
+  container.classList.remove('aed-map--kakao');
+  renderAedMap(center, aeds);
 }
 
 /** 지도 API 없이 현재 위치와 AED 의 상대 위치를 보여주는 약식 지도 */
@@ -485,6 +520,13 @@ function errorMessage(error: unknown): string {
 }
 
 async function init(): Promise<void> {
+  if (isAedOnly) {
+    document.title = '주변 AED 찾기 · TagMe';
+    for (const back of document.querySelectorAll<HTMLElement>('#view-aed .topbar-back')) back.hidden = true;
+    showView('aed');
+    void loadAeds();
+    return;
+  }
   if (!tagId) {
     showError('잘못된 주소입니다', '태그를 다시 대 주세요. 위급하면 바로 119에 신고하세요.');
     return;

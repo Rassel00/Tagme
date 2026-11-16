@@ -17,15 +17,17 @@ describe('웹 페이지 라우트 (DB 불필요)', () => {
     await new Promise((resolve) => server.close(resolve));
   });
 
-  for (const [path, script] of [
-    ['/t/SomeTagId', '/js/tag-page.js'],
-    ['/a/SomeApproveToken', '/js/approval-page.js'],
+  // /t·/aed 는 카카오맵 도메인 확인 때문에 도메인만 보내고(strict-origin), /a 는 아예 보내지 않는다
+  for (const [path, script, referrer] of [
+    ['/t/SomeTagId', '/js/tag-page.js', 'strict-origin'],
+    ['/aed', '/js/tag-page.js', 'strict-origin'],
+    ['/a/SomeApproveToken', '/js/approval-page.js', 'no-referrer'],
   ] as const) {
-    it(`${path} 는 HTML 을 주고 주소가 새지 않게 막는다`, async () => {
+    it(`${path} 는 HTML 을 주고 주소 경로가 새지 않게 막는다`, async () => {
       const res = await fetch(baseUrl + path);
       assert.equal(res.status, 200);
       assert.match(res.headers.get('content-type') ?? '', /text\/html/);
-      assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+      assert.equal(res.headers.get('referrer-policy'), referrer);
       assert.equal(res.headers.get('x-robots-tag'), 'noindex, nofollow');
       assert.equal(res.headers.get('cache-control'), 'no-store');
       assert.ok((await res.text()).includes(script));
