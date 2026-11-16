@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+*.log
+
+# 웹 클라이언트 빌드 결과 (server/web/src → server/web/public/js)
+server/web/public/js/
+
+# Flutter / Android
+app/build/
+app/.dart_tool/
+gateway/build/
+gateway/.gradle/
+*.iml
+local.properties
