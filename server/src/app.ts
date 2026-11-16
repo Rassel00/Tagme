@@ -32,11 +32,18 @@ export function createApp(options: AppOptions = {}): express.Express {
   app.use('/api', createAppApiRouter(options.verifyIdToken ?? createFirebaseVerifier()));
   app.use('/api', apiNotFoundHandler);
 
-  // 응급 지원 웹: 태그 URL 은 하나의 HTML 을 내려주고, 화면 전환은 클라이언트에서 처리
-  app.get('/t/:tagId', (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.sendFile(path.join(config.webRoot, 't.html'));
-  });
+  // 응급 지원 웹(/t)·보호자 승인 웹(/a): URL 마다 HTML 하나, 데이터는 클라이언트가 API 로 가져온다.
+  // URL 에 tagId·승인 토큰이 있으므로 외부 링크로 주소가 새지 않게 no-referrer, 검색 노출 금지
+  const sendPage = (file: string): express.RequestHandler => (_req, res) => {
+    res.set({
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+      'X-Robots-Tag': 'noindex, nofollow',
+    });
+    res.sendFile(path.join(config.webRoot, file));
+  };
+  app.get('/t/:tagId', sendPage('t.html'));
+  app.get('/a/:approveToken', sendPage('a.html'));
   app.use(express.static(config.webRoot, { index: false, maxAge: config.isProduction ? '1h' : 0 }));
 
   app.use(errorHandler);

@@ -5,7 +5,7 @@ import { createMockApi } from './mock-api.js';
 /** tagId 가 이 값이면 서버 없이 가짜 데이터로 화면을 보여준다 (/t/demo). */
 export const DEMO_TAG_ID = 'demo';
 
-async function request<T>(method: 'GET' | 'POST' | 'PATCH', url: string, body?: unknown): Promise<T> {
+export async function request<T>(method: 'GET' | 'POST' | 'PATCH', url: string, body?: unknown): Promise<T> {
   const response = await fetch(url, {
     method,
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },

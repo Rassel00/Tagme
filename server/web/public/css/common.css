@@ -303,3 +303,57 @@ body.is-sub { background: var(--bg); }
 .aed-address { color: var(--text-3); }
 .aed-link .menu-chevron { flex: none; }
 .aed-hint { margin: 10px 4px 0; color: var(--text-3); font-size: 13px; text-align: center; }
+
+/* ---------- 보호자 승인 페이지 (/a/{token}) ---------- */
+.hero--compact { padding: 28px 0 18px; }
+.hero--compact .hero-logo { width: 56px; height: 52px; }
+.hero--compact h1 { margin-top: 12px; font-size: 22px; }
+
+.field dd a { color: var(--blue); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.field dd .muted { color: var(--text-3); font-weight: 500; }
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f1f4;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+.badge--ok { background: var(--green-soft); color: var(--green); }
+.badge--alert { background: var(--red-soft); color: var(--red-strong); }
+
+.btn svg { width: 20px; height: 20px; flex: none; }
+.btn-call { margin-top: 4px; min-height: 60px; background: var(--green); color: #fff; font-size: 17px; }
+.btn-call:active { background: #17804f; }
+.btn-119-sub { margin: 10px 0 16px; background: var(--surface); border: 1px solid var(--line); color: var(--red-strong); }
+.btn-outline { background: var(--surface); border: 1px solid var(--line); color: var(--text-2); }
+
+.decision { padding-bottom: 18px; }
+.decision > p { margin: 0 0 14px; color: var(--text-2); font-size: 14px; }
+.decision .access-status { justify-content: flex-start; margin: 4px 0 6px; }
+.decision--approved .access-status { color: var(--green); }
+.decision--denied .access-status { color: var(--text-2); }
+
+.durations { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 14px; padding: 0; border: 0; }
+.durations legend { margin-bottom: 8px; padding: 0; color: var(--text-2); font-size: 14px; font-weight: 600; }
+.durations label { position: relative; }
+.durations input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.durations span {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.durations input:checked + span { border-color: var(--red); background: var(--red-soft); color: var(--red-strong); }
+.durations input:focus-visible + span { outline: 3px solid rgba(47, 124, 246, 0.5); outline-offset: 2px; }
+
+.decision-actions { display: grid; gap: 8px; }
+.sheet-icon--green { background: var(--green-soft); color: var(--green); }
