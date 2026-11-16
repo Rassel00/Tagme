@@ -1,10 +1,21 @@
 import path from 'node:path';
 import express from 'express';
 import { config } from './config.js';
+import { createFirebaseVerifier, type VerifyIdToken } from './lib/auth.js';
 import { apiNotFoundHandler, errorHandler } from './lib/errors.js';
+import { createAppApiRouter } from './routes/app-api.js';
+import { createApprovalsApiRouter } from './routes/approvals-api.js';
+import { createGatewayApiRouter } from './routes/gateway-api.js';
 import { healthRouter } from './routes/health.js';
+import { createPublicApiRouter } from './routes/public-api.js';
 
-export function createApp(): express.Express {
+export interface AppOptions {
+  /** 기본은 Firebase. 테스트에서 가짜 검증기를 넣는다. */
+  verifyIdToken?: VerifyIdToken;
+  gatewayKey?: string;
+}
+
+export function createApp(options: AppOptions = {}): express.Express {
   const app = express();
 
   app.disable('x-powered-by');
@@ -14,7 +25,11 @@ export function createApp(): express.Express {
   app.use(express.json({ limit: '32kb' }));
   app.use(healthRouter);
 
-  // API 라우터는 D2 에서 여기에 추가한다.
+  app.use('/api/public', createPublicApiRouter());
+  app.use('/api/approvals', createApprovalsApiRouter());
+  app.use('/api/gateway', createGatewayApiRouter(options.gatewayKey ?? config.gatewayKey));
+  // 앱 API 는 마지막: 인증 미들웨어가 /api 아래 나머지 경로 전체에 걸린다
+  app.use('/api', createAppApiRouter(options.verifyIdToken ?? createFirebaseVerifier()));
   app.use('/api', apiNotFoundHandler);
 
   // 응급 지원 웹: 태그 URL 은 하나의 HTML 을 내려주고, 화면 전환은 클라이언트에서 처리

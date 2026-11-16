@@ -308,8 +308,8 @@ async function refreshAlert(): Promise<void> {
     state.alert = await api.getAlert(state.alertId);
     if (previous !== state.alert.accessStatus && location.hash === '#info') renderInfo();
   } catch (error) {
-    // 세션 쿠키가 없거나 신고가 종료됨 → 새 신고를 만들 수 있게 초기화
-    if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403 || error.status === 404)) {
+    // 세션 쿠키가 없거나(403) 신고가 종료됨(410) → 새 신고를 만들 수 있게 초기화
+    if (error instanceof ApiRequestError && [401, 403, 404, 410].includes(error.status)) {
       state.alertId = undefined;
       state.alert = undefined;
       try {
