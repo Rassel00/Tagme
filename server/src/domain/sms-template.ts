@@ -1,0 +1,41 @@
+/** 보호자 문자 템플릿 (개발 문서 7.3) */
+import { ANONYMOUS_DISPLAY_NAME } from './constants.js';
+
+export interface GuardianSmsInput {
+  /** 이름은 공개 항목이 아니어도 보호자에게는 표시한다 */
+  userName: string;
+  message: string;
+  lat: number | null;
+  lng: number | null;
+  rescuerPhone: string | null;
+  isRescuerVerified: boolean;
+  hasRequestedAccess: boolean;
+  approveUrl: string;
+}
+
+/** 01012345678 → 010-1234-5678 */
+export function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return phone;
+}
+
+/** 단축 URL 은 스팸 필터에 걸릴 수 있어 원본 지도 링크를 쓴다. 한글 없는 ASCII URL. */
+export function mapUrl(lat: number, lng: number): string {
+  return `https://maps.google.com/?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+export function renderGuardianSms(input: GuardianSmsInput): string {
+  const name = input.userName.trim() || ANONYMOUS_DISPLAY_NAME;
+  const location = input.lat !== null && input.lng !== null ? mapUrl(input.lat, input.lng) : '위치 정보 없음';
+  const rescuer = input.rescuerPhone
+    ? `${formatPhone(input.rescuerPhone)} (${input.isRescuerVerified ? '인증됨' : '미인증'})`
+    : '미입력';
+
+  const lines = [`[응급안심] ${name}님 응급 태그가 스캔되었습니다.`];
+  if (input.message.trim()) lines.push(input.message.trim());
+  if (input.hasRequestedAccess) lines.push('신고자가 응급정보 열람을 요청했습니다.');
+  lines.push(`위치: ${location}`, `신고자: ${rescuer}`, '상황 확인·응급정보 열람 승인:', input.approveUrl);
+  return lines.join('\n');
+}
