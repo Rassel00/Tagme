@@ -10,6 +10,8 @@ server/web/public/js/
 app/build/
 app/.dart_tool/
 gateway/build/
+gateway/app/build/
+gateway/.kotlin/
 gateway/.gradle/
 *.iml
 local.properties
