@@ -218,6 +218,8 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
   it('게이트웨이: 키 없으면 401, 대기 문자를 sending 으로 꺼냄', async () => {
     assert.equal((await call('GET', '/api/gateway/sms-jobs')).status, 401);
     assert.equal((await call('GET', '/api/gateway/sms-jobs', { headers: { 'x-gateway-key': 'wrong' } })).status, 401);
+    assert.equal((await call('GET', '/api/gateway/ping', { headers: { 'x-gateway-key': 'wrong' } })).status, 401);
+    assert.deepEqual((await call('GET', '/api/gateway/ping', gw)).json, { ok: true });
 
     const jobs = await call('GET', '/api/gateway/sms-jobs', gw);
     assert.equal(jobs.status, 200);
@@ -343,6 +345,52 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
       { status: 'failed', error: 'RESULT_ERROR_NO_SERVICE' },
       { status: 'sent', error: null },
     ]);
+  });
+
+  it('신고자 번호: 직접 입력은 미인증, 문자 본인 확인으로 인증된 번호가 덮어씀', async () => {
+    assert.equal((await call('PATCH', `/api/public/alerts/${alertId}`, { body: { rescuerPhone: '01055556666' } })).status, 403);
+    const typed = await call('PATCH', `/api/public/alerts/${alertId}`, {
+      cookie: sessionCookie,
+      body: { rescuerPhone: '010-5555-6666' },
+    });
+    assert.equal(typed.status, 200);
+    let view = await call('GET', `/api/approvals/${approveTokens[0]}`);
+    assert.equal(view.json.alert.rescuerPhone, '01055556666');
+    assert.equal(view.json.alert.isRescuerVerified, false);
+
+    const { code } = (await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).json;
+    const wrong = await call('POST', '/api/gateway/inbound-sms', { ...gw, body: { from: '+821077778888', body: 'SOS-ZZZZZZ' } });
+    assert.deepEqual(wrong.json, { matched: false });
+    const sms = await call('POST', '/api/gateway/inbound-sms', {
+      ...gw,
+      body: { from: '+82 10-7777-8888', body: `SOS-${code}`, receivedAt: new Date().toISOString() },
+    });
+    assert.deepEqual(sms.json, { matched: true });
+
+    view = await call('GET', `/api/approvals/${approveTokens[0]}`);
+    assert.equal(view.json.alert.rescuerPhone, '01077778888');
+    assert.equal(view.json.alert.isRescuerVerified, true);
+    const overwrite = await call('PATCH', `/api/public/alerts/${alertId}`, {
+      cookie: sessionCookie,
+      body: { rescuerPhone: '01055556666' },
+    });
+    assert.equal(overwrite.status, 409);
+  });
+
+  it('게이트웨이가 결과 보고 없이 멈춘 건은 다시 대기, 3번 시도 후 실패', async () => {
+    // 재알림 테스트에서 가져간 뒤 결과를 보고하지 않은 2건 (attempts = 1)
+    const stall = () =>
+      pool.query(`UPDATE sms_jobs SET sending_at = now() - interval '3 minutes' WHERE status = 'sending'`);
+    await stall();
+    assert.equal((await call('GET', '/api/gateway/sms-jobs', gw)).json.length, 2);
+    await stall();
+    assert.equal((await call('GET', '/api/gateway/sms-jobs', gw)).json.length, 2);
+    await stall();
+    assert.equal((await call('GET', '/api/gateway/sms-jobs', gw)).json.length, 0);
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM sms_jobs WHERE status = 'failed' AND error = 'gateway_timeout'`,
+    );
+    assert.equal(rows[0].n, 2);
   });
 
   it('비활성 태그는 410, 신고도 불가', async () => {

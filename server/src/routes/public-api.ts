@@ -17,7 +17,8 @@ import {
 import { ApiError } from '../lib/errors.js';
 import { param, readCookie } from '../lib/http.js';
 import { generateAlertCode, generateAlertId, generateToken, hashToken } from '../lib/ids.js';
-import { parseOrThrow } from '../lib/validate.js';
+import { createRateLimiter } from '../lib/rate-limit.js';
+import { parseOrThrow, phoneSchema } from '../lib/validate.js';
 import { findProfile } from '../repos/profiles.js';
 import { findAlert, notifyGuardians, type AlertRow } from '../services/alerts.js';
 
@@ -60,11 +61,19 @@ const alertBody = z
   })
   .refine((b) => (b.lat === undefined) === (b.lng === undefined), '위도와 경도는 함께 보내야 합니다.');
 
+const rescuerPhoneBody = z.object({ rescuerPhone: phoneSchema });
+
 export function createPublicApiRouter(): Router {
   const router = Router();
+  // tagId 를 바꿔가며 조회하는 것을 막기 위해 공개 조회는 IP당 분당 30회 (BE-08)
+  const lookupLimiter = createRateLimiter({
+    windowMs: 60_000,
+    max: LIMITS.publicLookupsPerIpPerMinute,
+    key: (req) => req.ip ?? 'unknown',
+  });
 
   // 공개 정보 + 잠긴 항목명 (BE-03)
-  router.get('/tags/:tagId', async (req, res) => {
+  router.get('/tags/:tagId', lookupLimiter, async (req, res) => {
     const tag = await findActiveTag(param(req, 'tagId'));
     const profile = await findProfile(getPool(), tag.userId);
     const { rows } = await getPool().query<{ count: string }>('SELECT count(*) FROM contacts WHERE tag_id = $1', [tag.id]);
@@ -123,6 +132,20 @@ export function createPublicApiRouter(): Router {
       response.emergencyInfo = toLockedValues(profile);
     }
     res.json(response);
+  });
+
+  // 신고자 번호 직접 입력 (WEB-05, BE 2.16). 문자로 인증된 번호는 덮어쓰지 않는다
+  router.patch('/alerts/:alertId', async (req, res) => {
+    const { rescuerPhone } = parseOrThrow(rescuerPhoneBody, req.body);
+    const alert = await requireOwnAlert(req);
+    if (alert.isRescuerVerified) {
+      throw new ApiError(409, 'rescuer_verified', '이미 문자로 인증된 번호가 있습니다.');
+    }
+    await getPool().query('UPDATE alerts SET rescuer_phone = $2 WHERE id = $1 AND NOT is_rescuer_verified', [
+      alert.id,
+      rescuerPhone,
+    ]);
+    res.json({ rescuerPhone, isRescuerVerified: false });
   });
 
   return router;
