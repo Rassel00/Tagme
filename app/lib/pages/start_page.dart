@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../api/models.dart';
 import '../config.dart';
+import 'consent_page.dart';
 import '../services/auth_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -26,6 +28,16 @@ class _StartPageState extends State<StartPage> {
     } finally {
       if (mounted) setState(() => _isBusy = false);
     }
+  }
+
+  /// 게스트: 동의 화면을 먼저 보여주고, 동의했을 때만 게스트 계정을 만든다
+  Future<void> _startAsGuest() async {
+    final consents = await Navigator.push<PendingConsents>(
+      context,
+      MaterialPageRoute(builder: (_) => const ConsentPage.guestSignUp()),
+    );
+    if (consents == null || !mounted) return;
+    await _run(() => AuthService.instance.signInAsGuest(consents));
   }
 
   @override
@@ -71,7 +83,7 @@ class _StartPageState extends State<StartPage> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton(
-                      onPressed: _isBusy ? null : () => _run(AuthService.instance.signInAsGuest),
+                      onPressed: _isBusy ? null : _startAsGuest,
                       child: const Text('게스트로 시작하기'),
                     ),
                     const SizedBox(height: 12),

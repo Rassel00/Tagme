@@ -29,14 +29,13 @@ class ApiClient {
   final http.Client _client;
   final String _baseUrl;
 
-  Future<dynamic> _request(String method, String path, {Object? body}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw ApiException(401, 'unauthorized', '로그인이 필요합니다.');
-    final token = await user.getIdToken();
-
-    final request = http.Request(method, Uri.parse('$_baseUrl$path'))
-      ..headers['Authorization'] = 'Bearer $token'
-      ..headers['Accept'] = 'application/json';
+  Future<dynamic> _request(String method, String path, {Object? body, bool isAuthRequired = true}) async {
+    final request = http.Request(method, Uri.parse('$_baseUrl$path'))..headers['Accept'] = 'application/json';
+    if (isAuthRequired) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw ApiException(401, 'unauthorized', '로그인이 필요합니다.');
+      request.headers['Authorization'] = 'Bearer ${await user.getIdToken()}';
+    }
     if (body != null) {
       request.headers['Content-Type'] = 'application/json; charset=utf-8';
       request.body = jsonEncode(body);
@@ -82,6 +81,10 @@ class ApiClient {
 
   Future<bool> registerMe() async =>
       _map(await _request('POST', '/api/users/me'))['isConsentRequired'] as bool? ?? true;
+
+  /// 현재 약관 버전 (로그인 불필요). 게스트는 동의한 뒤 계정을 만들기 때문에 로그인 전에 쓴다
+  Future<String> getConsentVersion() async =>
+      _map(await _request('GET', '/api/public/consents', isAuthRequired: false))['version'] as String;
 
   Future<ConsentStatus> getConsents() async => ConsentStatus.fromJson(_map(await _request('GET', '/api/consents')));
 

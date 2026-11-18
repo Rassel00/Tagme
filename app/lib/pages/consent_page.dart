@@ -7,10 +7,17 @@ import '../widgets/common.dart';
 import '../widgets/sign_out_dialog.dart';
 
 /// 개인정보 동의 (APP-02). 필수 항목 전체 동의 시 진행, 약관 버전이 바뀌면 다시 보여준다.
+///
+/// - 로그인 후(구글, 약관이 바뀐 기존 사용자): 동의를 서버에 저장하고 [onCompleted]. 나가기 = 로그아웃(게스트는 계정 삭제)
+/// - 게스트 가입 전([ConsentPage.guestSignUp]): 계정이 아직 없다. 동의하면 고른 항목을 돌려주고(pop),
+///   시작 화면이 그때 게스트 계정을 만든다. 나가기 = 시작 화면으로 돌아가기
 class ConsentPage extends StatefulWidget {
-  const ConsentPage({super.key, required this.onCompleted});
+  const ConsentPage({super.key, required VoidCallback this.onCompleted}) : isGuestSignUp = false;
 
-  final VoidCallback onCompleted;
+  const ConsentPage.guestSignUp({super.key}) : onCompleted = null, isGuestSignUp = true;
+
+  final VoidCallback? onCompleted;
+  final bool isGuestSignUp;
 
   @override
   State<ConsentPage> createState() => _ConsentPageState();
@@ -32,6 +39,11 @@ class _ConsentPageState extends State<ConsentPage> {
 
   Future<void> _load() async {
     try {
+      if (widget.isGuestSignUp) {
+        final version = await ApiClient.instance.getConsentVersion();
+        if (mounted) setState(() => _version = version);
+        return;
+      }
       final status = await ApiClient.instance.getConsents();
       setState(() {
         _version = status.version;
@@ -45,10 +57,14 @@ class _ConsentPageState extends State<ConsentPage> {
   Future<void> _submit() async {
     final version = _version;
     if (version == null) return;
+    if (widget.isGuestSignUp) {
+      Navigator.pop(context, PendingConsents(version: version, types: {..._checked}));
+      return;
+    }
     setState(() => _isSaving = true);
     try {
       final status = await ApiClient.instance.saveConsents(version, _checked);
-      if (status.isComplete) widget.onCompleted();
+      if (status.isComplete) widget.onCompleted?.call();
     } catch (e) {
       if (mounted) showMessage(context, e.toString());
     } finally {
@@ -62,7 +78,12 @@ class _ConsentPageState extends State<ConsentPage> {
       appBar: AppBar(
         title: const Text('개인정보 동의'),
         automaticallyImplyLeading: false,
-        actions: [TextButton(onPressed: () => confirmSignOut(context), child: const Text('나가기'))],
+        actions: [
+          TextButton(
+            onPressed: () => widget.isGuestSignUp ? Navigator.pop(context) : confirmSignOut(context),
+            child: const Text('나가기'),
+          ),
+        ],
       ),
       body: _version == null
           ? const Center(child: CircularProgressIndicator())

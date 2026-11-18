@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../api/models.dart';
 import '../firebase_options.dart';
 
 /// 구글·게스트(익명) 로그인 (APP-01), 게스트 → 구글 계정 연결 (APP-03)
@@ -35,8 +36,18 @@ class AuthService {
     await _auth.signInWithCredential(await _googleCredential());
   }
 
-  Future<void> signInAsGuest() async {
-    await _auth.signInAnonymously();
+  /// 게스트 가입 전에 받은 동의. 계정을 만든 직후 AuthGate 가 서버에 저장하고 비운다
+  PendingConsents? pendingGuestConsents;
+
+  /// 게스트 계정 생성. 동의 화면에서 동의한 뒤에만 부른다 (11/18: 동의 전에는 계정을 만들지 않음)
+  Future<void> signInAsGuest(PendingConsents consents) async {
+    pendingGuestConsents = consents;
+    try {
+      await _auth.signInAnonymously();
+    } catch (_) {
+      pendingGuestConsents = null;
+      rethrow;
+    }
   }
 
   /// 게스트 계정에 구글 계정을 연결한다. uid 가 그대로라 등록한 대상자·태그가 유지된다.
@@ -50,6 +61,7 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    pendingGuestConsents = null;
     if (_isGoogleInitialized) await GoogleSignIn.instance.signOut();
     await _auth.signOut();
   }

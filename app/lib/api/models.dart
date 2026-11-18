@@ -172,6 +172,14 @@ class ConsentStatus {
   );
 }
 
+/// 게스트 가입 전 동의 화면에서 고른 항목. 계정을 만든 직후 서버에 저장한다
+class PendingConsents {
+  const PendingConsents({required this.version, required this.types});
+
+  final String version;
+  final Set<String> types;
+}
+
 class TagInfo {
   TagInfo({
     required this.tagId,

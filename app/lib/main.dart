@@ -68,11 +68,18 @@ class _RegisteredGateState extends State<_RegisteredGate> {
     _register();
   }
 
-  /// 로그인 직후 POST /api/users/me 로 사용자 생성·조회
+  /// 로그인 직후 POST /api/users/me 로 사용자 생성·조회.
+  /// 게스트 가입이면 가입 전에 받은 동의를 바로 저장한다 (동의 화면을 다시 보여주지 않게)
   Future<void> _register() async {
     setState(() => _error = null);
     try {
-      final isRequired = await ApiClient.instance.registerMe();
+      var isRequired = await ApiClient.instance.registerMe();
+      final pending = AuthService.instance.pendingGuestConsents;
+      if (isRequired && pending != null) {
+        final status = await ApiClient.instance.saveConsents(pending.version, pending.types);
+        isRequired = !status.isComplete;
+      }
+      AuthService.instance.pendingGuestConsents = null;
       if (mounted) setState(() => _isConsentRequired = isRequired);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
