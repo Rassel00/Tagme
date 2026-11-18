@@ -38,12 +38,8 @@ class _TagEditorPageState extends State<TagEditorPage> {
   String? _personId;
   final List<String> _contactIds = [];
 
-  /// 연락처별 보호자 여부 (기본 보호자)와 등록자 메모 (11/18)
+  /// 연락처별 보호자 여부 (기본 보호자). 연락처별 메모 기능은 11/18 에 없앴다
   final Map<String, bool> _isGuardian = {};
-  final Map<String, TextEditingController> _memos = {};
-
-  TextEditingController _memoOf(String contactId) =>
-      _memos.putIfAbsent(contactId, TextEditingController.new);
   final _label = TextEditingController();
   final _message = TextEditingController(text: '긴급상황입니다. 위치 확인 부탁드립니다');
 
@@ -62,9 +58,6 @@ class _TagEditorPageState extends State<TagEditorPage> {
   void dispose() {
     _label.dispose();
     _message.dispose();
-    for (final c in _memos.values) {
-      c.dispose();
-    }
     super.dispose();
   }
 
@@ -90,7 +83,6 @@ class _TagEditorPageState extends State<TagEditorPage> {
           ..addAll(tag.contacts.map((c) => c.contactId!).where((id) => _contacts.any((c) => c.contactId == id)));
         for (final c in tag.contacts) {
           _isGuardian[c.contactId!] = c.isGuardian;
-          _memoOf(c.contactId!).text = c.message;
         }
         _label.text = tag.label;
         _message.text = tag.defaultMessage;
@@ -214,7 +206,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
           personId: _personId,
           contacts: [
             for (final id in _contactIds)
-              TagContactInput(contactId: id, isGuardian: _isGuardian[id] ?? true, message: _memoOf(id).text.trim()),
+              TagContactInput(contactId: id, isGuardian: _isGuardian[id] ?? true),
           ],
         ),
         tagId: _savedTag?.tagId,
@@ -314,13 +306,13 @@ class _TagEditorPageState extends State<TagEditorPage> {
     );
   }
 
-  /// 선택한 연락처 아래: 보호자 여부와 이 사람에게만 보낼 메모
+  /// 선택한 연락처 아래: 보호자 여부
   Widget _contactOptions(AddressContact contact) {
     final id = contact.contactId!;
     final isGuardian = _isGuardian[id] ?? true;
     return Container(
       margin: const EdgeInsets.only(top: 6, left: 12),
-      padding: const EdgeInsets.fromLTRB(14, 4, 6, 12),
+      padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.line),
@@ -351,25 +343,6 @@ class _TagEditorPageState extends State<TagEditorPage> {
                 }),
               ),
             ],
-          ),
-          // 칸 안에 뜨는 라벨이 위 설명·힌트와 겹쳐서 칸 위 제목으로 뺐다 (11/18)
-          const SizedBox(height: 10),
-          const Text(
-            '이 사람에게 보낼 메모 (선택)',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: TextField(
-              controller: _memoOf(id),
-              maxLength: 100,
-              onChanged: (_) => _markDirty(),
-              decoration: const InputDecoration(
-                hintText: '예: 먼저 전화 주세요',
-                counterText: '',
-              ),
-            ),
           ),
         ],
       ),

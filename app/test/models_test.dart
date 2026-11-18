@@ -81,14 +81,14 @@ void main() {
       expect(tag('김지우', '').contacts.single.name, '엄마');
     });
 
-    test('태그 저장 요청에는 연락처 ID·보호자 여부·메모를 보낸다 (번호는 보내지 않음)', () {
+    test('태그 저장 요청에는 연락처 ID·보호자 여부를 보낸다 (번호는 보내지 않음)', () {
       final input = TagInput(
         label: '키링',
         defaultMessage: 'm',
         personId: 'p1',
         contacts: const [
           TagContactInput(contactId: 'c1'),
-          TagContactInput(contactId: 'c2', isGuardian: false, message: '회사면 엄마에게'),
+          TagContactInput(contactId: 'c2', isGuardian: false),
         ],
       );
       expect(input.toJson(), {
@@ -96,16 +96,15 @@ void main() {
         'defaultMessage': 'm',
         'personId': 'p1',
         'contacts': [
-          {'contactId': 'c1', 'isGuardian': true, 'message': ''},
-          {'contactId': 'c2', 'isGuardian': false, 'message': '회사면 엄마에게'},
+          {'contactId': 'c1', 'isGuardian': true},
+          {'contactId': 'c2', 'isGuardian': false},
         ],
       });
     });
 
-    test('태그 상세 연락처의 보호자 여부·메모 (없으면 보호자)', () {
-      final contact = AddressContact.fromJson({'contactId': 'c', 'name': '아빠', 'phone': '01011112222', 'isGuardian': false, 'message': 'm'});
+    test('태그 상세 연락처의 보호자 여부 (없으면 보호자)', () {
+      final contact = AddressContact.fromJson({'contactId': 'c', 'name': '아빠', 'phone': '01011112222', 'isGuardian': false});
       expect(contact.isGuardian, isFalse);
-      expect(contact.message, 'm');
       expect(AddressContact.fromJson({'name': 'x', 'phone': '0'}).isGuardian, isTrue);
     });
   });

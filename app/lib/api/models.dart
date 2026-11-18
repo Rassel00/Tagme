@@ -202,7 +202,6 @@ class AddressContact {
     this.tagCount = 0,
     this.inviteStatus,
     this.isGuardian = true,
-    this.message = '',
   });
 
   final String? contactId;
@@ -218,9 +217,6 @@ class AddressContact {
 
   /// 태그 상세의 연락처만: 보호자면 응급정보 열람 승인 링크를 받는다 (11/18)
   final bool isGuardian;
-
-  /// 태그 상세의 연락처만: 이 연락처 문자에 함께 가는 등록자 메모
-  final String message;
 
   bool get isAccepted => inviteStatus == 'accepted';
 
@@ -239,7 +235,6 @@ class AddressContact {
     tagCount: (json['tagCount'] as num?)?.toInt() ?? 0,
     inviteStatus: json['inviteStatus'] as String?,
     isGuardian: json['isGuardian'] as bool? ?? true,
-    message: json['message'] as String? ?? '',
   );
 
   Map<String, dynamic> toJson() => {'name': name, 'relation': relation, 'phone': phone};
@@ -359,17 +354,16 @@ class TagInfo {
 }
 
 /// 태그 저장 요청 (추가·수정 공용)
-/// 태그에 연결할 연락처: 보호자 여부와 이 연락처에게만 보낼 메모 (11/18)
+/// 태그에 연결할 연락처: 보호자 여부 (11/18)
 class TagContactInput {
-  const TagContactInput({required this.contactId, this.isGuardian = true, this.message = ''});
+  const TagContactInput({required this.contactId, this.isGuardian = true});
 
   final String contactId;
 
   /// 보호자만 응급정보 열람 승인 링크를 받는다. 아니면 비상연락망 연락 때 위치 알림만
   final bool isGuardian;
-  final String message;
 
-  Map<String, dynamic> toJson() => {'contactId': contactId, 'isGuardian': isGuardian, 'message': message};
+  Map<String, dynamic> toJson() => {'contactId': contactId, 'isGuardian': isGuardian};
 }
 
 class TagInput {
