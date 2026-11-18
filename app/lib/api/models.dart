@@ -38,6 +38,7 @@ enum PersonType {
   }),
   disabled('장애인', '"이 분을 도와주세요" · 장애 유형·의사소통 방법을 먼저 보여 줘요', {
     ProfileField.name,
+    ProfileField.birthDate,
     ProfileField.bloodType,
     ProfileField.allergies,
     ProfileField.disabilityType,
@@ -64,7 +65,7 @@ enum PersonType {
   final String description;
 
   /// 유형을 고르면 자동으로 적용하는 추천 공개 범위 (11/18).
-  /// 응급 처치에 바로 쓰이는 알레르기는 모든 유형에서 공개, 지병·복용약은 어르신만 기본 공개
+  /// 응급 처치에 바로 쓰이는 알레르기·생년월일(나이)은 모든 유형에서 공개, 지병·복용약은 어르신만 기본 공개
   /// (낙인이 될 수 있어 다른 유형은 비공개), 보험은 기본 비공개. docs/개발-진행.md 근거 참고
   final Set<ProfileField> recommendedPublic;
 

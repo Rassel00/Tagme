@@ -156,9 +156,10 @@ void main() {
     expect(json['personType'], 'disabled');
     expect(json['communication'], '필담');
     expect((json['insurances'] as List).first, {'company': '응급손해보험', 'phone': '1588-0000', 'note': ''});
-    // 추천 공개 범위: 알레르기는 모든 유형에서 공개, 보험은 기본 비공개
+    // 추천 공개 범위: 알레르기·생년월일은 모든 유형에서 공개 (의학적 근거), 보험은 기본 비공개
     for (final type in PersonType.values) {
       expect(type.recommendedPublic, contains(ProfileField.allergies));
+      expect(type.recommendedPublic, contains(ProfileField.birthDate));
       expect(type.recommendedPublic, isNot(contains(ProfileField.insurances)));
     }
     expect(Person.fromJson({'name': 'x', 'personType': 'unknown'}).personType, PersonType.general);
