@@ -23,9 +23,14 @@ class _PersonFormPageState extends State<PersonFormPage> {
     'A형 (Rh-)', 'B형 (Rh-)', 'O형 (Rh-)', 'AB형 (Rh-)',
   ];
 
+  // 새 대상자는 범용 유형의 추천 공개 범위로 시작
   late final Person _person = widget.person == null
-      ? Person(publicFields: {ProfileField.bloodType, ProfileField.allergies})
+      ? Person(publicFields: {...PersonType.general.recommendedPublic})
       : Person.fromJson({...?_copy(widget.person!)});
+
+  /// 보험 입력 칸 (보험마다 컨트롤러 3개)
+  late final List<_InsuranceDraft> _insurances = _person.insurances.map(_InsuranceDraft.new).toList();
+  static const _maxInsurances = 3;
   final _formKey = GlobalKey<FormState>();
   late final _controllers = <ProfileField, TextEditingController>{
     ProfileField.name: TextEditingController(text: _person.name),
@@ -33,6 +38,9 @@ class _PersonFormPageState extends State<PersonFormPage> {
     ProfileField.allergies: TextEditingController(text: _person.allergies),
     ProfileField.medications: TextEditingController(text: _person.medications),
     ProfileField.notes: TextEditingController(text: _person.notes),
+    ProfileField.disabilityType: TextEditingController(text: _person.disabilityType),
+    ProfileField.communication: TextEditingController(text: _person.communication),
+    ProfileField.careTips: TextEditingController(text: _person.careTips),
   };
   bool _isSaving = false;
   bool _isDirty = false;
@@ -43,6 +51,9 @@ class _PersonFormPageState extends State<PersonFormPage> {
   void dispose() {
     for (final c in _controllers.values) {
       c.dispose();
+    }
+    for (final d in _insurances) {
+      d.dispose();
     }
     super.dispose();
   }
@@ -58,7 +69,11 @@ class _PersonFormPageState extends State<PersonFormPage> {
       ..conditions = _controllers[ProfileField.conditions]!.text.trim()
       ..allergies = _controllers[ProfileField.allergies]!.text.trim()
       ..medications = _controllers[ProfileField.medications]!.text.trim()
-      ..notes = _controllers[ProfileField.notes]!.text.trim();
+      ..notes = _controllers[ProfileField.notes]!.text.trim()
+      ..disabilityType = _controllers[ProfileField.disabilityType]!.text.trim()
+      ..communication = _controllers[ProfileField.communication]!.text.trim()
+      ..careTips = _controllers[ProfileField.careTips]!.text.trim()
+      ..insurances = _insurances.map((d) => d.toInsurance()).toList();
     setState(() => _isSaving = true);
     try {
       final saved = await ApiClient.instance.savePerson(_person);
@@ -89,13 +104,26 @@ class _PersonFormPageState extends State<PersonFormPage> {
     });
   }
 
+  /// 유형을 바꾸면 그 유형의 추천 공개 범위로 바꾼다 (보험 공개 여부는 그대로)
+  void _selectType(PersonType type) {
+    if (_person.personType == type) return;
+    setState(() {
+      final keepInsurance = _person.publicFields.contains(ProfileField.insurances);
+      _person
+        ..personType = type
+        ..publicFields = {...type.recommendedPublic, if (keepInsurance) ProfileField.insurances};
+      _isDirty = true;
+    });
+    showMessage(context, '${type.label} 유형의 추천 공개 범위로 바꿨어요. 항목별로 다시 바꿀 수 있어요.');
+  }
+
   Widget _publicSwitch(ProfileField field) {
     final isPublic = _person.publicFields.contains(field);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          isPublic ? '누구나 보기' : '승인 후 보기',
+          isPublic ? '공개' : '비공개',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
@@ -139,15 +167,80 @@ class _PersonFormPageState extends State<PersonFormPage> {
     int maxLength = 200,
     int maxLines = 2,
     FormFieldValidator<String>? validator,
+    TextInputType? keyboardType,
   }) {
     return TextFormField(
       controller: _controllers[field],
+      keyboardType: keyboardType,
       maxLength: maxLength,
       minLines: 1,
       maxLines: maxLines,
       onChanged: (_) => _markDirty(),
       validator: validator,
       decoration: InputDecoration(hintText: hint, counterText: ''),
+    );
+  }
+
+  Widget _insuranceCard(int index, _InsuranceDraft draft) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(12, 4, 4, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('보험 ${index + 1}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              const Spacer(),
+              IconButton(
+                tooltip: '이 보험 삭제',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => setState(() {
+                  _insurances.removeAt(index).dispose();
+                  _isDirty = true;
+                }),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: draft.company,
+                  maxLength: 30,
+                  onChanged: (_) => _markDirty(),
+                  validator: (v) => (v ?? '').trim().isEmpty ? '보험사를 입력하세요' : null,
+                  decoration: const InputDecoration(labelText: '보험사', hintText: '예: OO손해보험 자동차', counterText: ''),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: draft.phone,
+                  maxLength: 20,
+                  keyboardType: TextInputType.phone,
+                  onChanged: (_) => _markDirty(),
+                  validator: (v) =>
+                      RegExp(r'^[0-9-]*$').hasMatch((v ?? '').trim()) ? null : '숫자와 하이픈(-)만 입력하세요',
+                  decoration: const InputDecoration(labelText: '사고 접수 번호', hintText: '예: 1588-0000', counterText: ''),
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: draft.note,
+                  maxLength: 100,
+                  onChanged: (_) => _markDirty(),
+                  decoration: const InputDecoration(labelText: '메모 (선택)', hintText: '예: 증권번호, 가입 상품', counterText: ''),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -172,8 +265,38 @@ class _PersonFormPageState extends State<PersonFormPage> {
             children: [
               const NoticeBox(
                 text:
-                    '"누구나 보기" 항목은 태그를 댄 사람 누구나 볼 수 있어요. '
-                    '"승인 후 보기" 항목은 보호자가 문자로 승인한 경우에만 그 신고자에게 보여요.',
+                    '공개 항목은 태그를 댄 사람 누구나 볼 수 있어요. '
+                    '비공개 항목은 신고자가 열람을 요청하고 보호자가 문자로 승인한 경우에만 그 신고자에게 보여요.',
+              ),
+              const SizedBox(height: 12),
+              // 유형 (11/18): 태그를 댔을 때 열리는 응급 화면의 제목과 상단 정보가 달라진다
+              SectionCard(
+                icon: Icons.badge_outlined,
+                title: '대상자 유형',
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final type in PersonType.values)
+                          ChoiceChip(
+                            label: Text(type.label),
+                            selected: _person.personType == type,
+                            onSelected: (_) => _selectType(type),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 4),
+                    child: Text(
+                      _person.personType.description,
+                      style: const TextStyle(fontSize: 13, color: AppColors.text3, height: 1.4),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               SectionCard(
@@ -233,6 +356,36 @@ class _PersonFormPageState extends State<PersonFormPage> {
                   _field(ProfileField.medications, _text(ProfileField.medications, hint: '예: 천식 흡입기 (살부타몰)')),
                 ],
               ),
+              // 장애인 유형이거나 이미 입력한 값이 있으면 보여 준다
+              if (_person.personType == PersonType.disabled ||
+                  _person.disabilityType.isNotEmpty ||
+                  _person.communication.isNotEmpty ||
+                  _person.careTips.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SectionCard(
+                  icon: Icons.accessibility_new,
+                  title: '장애·의사소통',
+                  children: [
+                    _field(
+                      ProfileField.disabilityType,
+                      _text(ProfileField.disabilityType, hint: '예: 청각장애, 자폐성 장애', maxLength: 50, maxLines: 1),
+                    ),
+                    _field(
+                      ProfileField.communication,
+                      _text(ProfileField.communication, hint: '예: 필담·수어·그림카드', maxLength: 100),
+                    ),
+                    _field(
+                      ProfileField.careTips,
+                      _text(
+                        ProfileField.careTips,
+                        hint: '예: 천천히 짧게 말해 주세요 · 글로 써서 보여 주세요',
+                        maxLength: 200,
+                        maxLines: 3,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 12),
               SectionCard(
                 icon: Icons.sticky_note_2_outlined,
@@ -244,6 +397,42 @@ class _PersonFormPageState extends State<PersonFormPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              // 보험 정보 (선택): 입력하면 응급 화면에 "보험 정보" 버튼이 생긴다
+              SectionCard(
+                icon: Icons.health_and_safety_outlined,
+                title: '보험 정보 (선택)',
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      '등록하면 응급 화면에 "보험 정보" 버튼이 생겨요. 공개 여부는 보험 전체에 한 번에 적용돼요.',
+                      style: TextStyle(fontSize: 13, color: AppColors.text3, height: 1.4),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text('공개 여부 (보험 전체)', style: TextStyle(fontSize: 15, color: AppColors.text2)),
+                      ),
+                      _publicSwitch(ProfileField.insurances),
+                    ],
+                  ),
+                  for (final (index, draft) in _insurances.indexed) _insuranceCard(index, draft),
+                  if (_insurances.length < _maxInsurances)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 4),
+                      child: OutlinedButton.icon(
+                        onPressed: () => setState(() {
+                          _insurances.add(_InsuranceDraft(Insurance()));
+                          _isDirty = true;
+                        }),
+                        icon: const Icon(Icons.add),
+                        label: Text('보험 추가 (${_insurances.length}/$_maxInsurances)'),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -252,5 +441,26 @@ class _PersonFormPageState extends State<PersonFormPage> {
         ),
       ),
     );
+  }
+}
+
+/// 보험 하나의 입력 상태
+class _InsuranceDraft {
+  _InsuranceDraft(Insurance insurance)
+    : company = TextEditingController(text: insurance.company),
+      phone = TextEditingController(text: insurance.phone),
+      note = TextEditingController(text: insurance.note);
+
+  final TextEditingController company;
+  final TextEditingController phone;
+  final TextEditingController note;
+
+  Insurance toInsurance() =>
+      Insurance(company: company.text.trim(), phone: phone.text.trim(), note: note.text.trim());
+
+  void dispose() {
+    company.dispose();
+    phone.dispose();
+    note.dispose();
   }
 }

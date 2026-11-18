@@ -35,6 +35,13 @@ class _TagEditorPageState extends State<TagEditorPage> {
   List<AddressContact> _contacts = [];
   String? _personId;
   final List<String> _contactIds = [];
+
+  /// 연락처별 보호자 여부 (기본 보호자)와 등록자 메모 (11/18)
+  final Map<String, bool> _isGuardian = {};
+  final Map<String, TextEditingController> _memos = {};
+
+  TextEditingController _memoOf(String contactId) =>
+      _memos.putIfAbsent(contactId, TextEditingController.new);
   final _label = TextEditingController();
   final _message = TextEditingController(text: '긴급상황입니다. 위치 확인 부탁드립니다');
 
@@ -53,6 +60,9 @@ class _TagEditorPageState extends State<TagEditorPage> {
   void dispose() {
     _label.dispose();
     _message.dispose();
+    for (final c in _memos.values) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -76,6 +86,10 @@ class _TagEditorPageState extends State<TagEditorPage> {
         _contactIds
           ..clear()
           ..addAll(tag.contacts.map((c) => c.contactId!).where((id) => _contacts.any((c) => c.contactId == id)));
+        for (final c in tag.contacts) {
+          _isGuardian[c.contactId!] = c.isGuardian;
+          _memoOf(c.contactId!).text = c.message;
+        }
         _label.text = tag.label;
         _message.text = tag.defaultMessage;
       } else if (_persons.length == 1) {
@@ -196,7 +210,10 @@ class _TagEditorPageState extends State<TagEditorPage> {
           label: _label.text.trim(),
           defaultMessage: _message.text.trim(),
           personId: _personId,
-          contactIds: List.of(_contactIds),
+          contacts: [
+            for (final id in _contactIds)
+              TagContactInput(contactId: id, isGuardian: _isGuardian[id] ?? true, message: _memoOf(id).text.trim()),
+          ],
         ),
         tagId: _savedTag?.tagId,
       );
@@ -248,7 +265,12 @@ class _TagEditorPageState extends State<TagEditorPage> {
             for (final contact in tag.contacts)
               Row(
                 children: [
-                  Expanded(child: Text(contact.title, style: const TextStyle(fontWeight: FontWeight.w600))),
+                  Expanded(
+                    child: Text(
+                      contact.isGuardian ? '${contact.title} · 보호자' : contact.title,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
                   StatusBadge(label: contact.inviteLabel, isPositive: contact.isAccepted),
                   if (contact.inviteStatus == 'pending')
                     TextButton(onPressed: () => _resendInvite(contact), child: const Text('다시 보내기'))
@@ -258,6 +280,62 @@ class _TagEditorPageState extends State<TagEditorPage> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 선택한 연락처 아래: 보호자 여부와 이 사람에게만 보낼 메모
+  Widget _contactOptions(AddressContact contact) {
+    final id = contact.contactId!;
+    final isGuardian = _isGuardian[id] ?? true;
+    return Container(
+      margin: const EdgeInsets.only(top: 6, left: 12),
+      padding: const EdgeInsets.fromLTRB(14, 4, 6, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('보호자', style: TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      isGuardian ? '응급정보 열람 요청을 받고 승인할 수 있어요' : '비상연락망 연락 때 위치 알림만 받아요',
+                      style: const TextStyle(fontSize: 12, color: AppColors.text3),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: isGuardian,
+                onChanged: (value) => setState(() {
+                  _isGuardian[id] = value;
+                  _isDirty = true;
+                }),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextField(
+              controller: _memoOf(id),
+              maxLength: 100,
+              onChanged: (_) => _markDirty(),
+              decoration: const InputDecoration(
+                labelText: '이 사람에게 보낼 메모 (선택)',
+                hintText: '예: 회사에 있으면 엄마에게 연락해 주세요',
+                counterText: '',
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -272,7 +350,8 @@ class _TagEditorPageState extends State<TagEditorPage> {
         ),
         const SizedBox(height: 4),
         const Text(
-          '새로 선택한 연락처에는 수락 안내 문자가 가요. 수락한 사람에게만 신고 알림 문자가 가요.',
+          '새로 선택한 연락처에는 수락 안내 문자가 가요. 수락한 사람에게만 신고 알림 문자가 가요. '
+          '응급정보 열람 승인은 "보호자"로 켠 사람에게만 요청돼요.',
           style: TextStyle(color: AppColors.text2, height: 1.4),
         ),
         const SizedBox(height: 16),
@@ -285,6 +364,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
             subtitle: _contactSubtitle(contact),
             onTap: () => _toggleContact(contact),
           ),
+          if (_contactIds.contains(contact.contactId)) _contactOptions(contact),
           const SizedBox(height: 10),
         ],
         OutlinedButton.icon(onPressed: _addContact, icon: const Icon(Icons.add), label: const Text('새 연락처 추가')),

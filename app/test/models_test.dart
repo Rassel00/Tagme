@@ -81,14 +81,32 @@ void main() {
       expect(tag('김지우', '').contacts.single.name, '엄마');
     });
 
-    test('태그 저장 요청에는 연락처 ID 만 보낸다', () {
-      final input = TagInput(label: '키링', defaultMessage: 'm', personId: 'p1', contactIds: ['c1', 'c2']);
+    test('태그 저장 요청에는 연락처 ID·보호자 여부·메모를 보낸다 (번호는 보내지 않음)', () {
+      final input = TagInput(
+        label: '키링',
+        defaultMessage: 'm',
+        personId: 'p1',
+        contacts: const [
+          TagContactInput(contactId: 'c1'),
+          TagContactInput(contactId: 'c2', isGuardian: false, message: '회사면 엄마에게'),
+        ],
+      );
       expect(input.toJson(), {
         'label': '키링',
         'defaultMessage': 'm',
         'personId': 'p1',
-        'contactIds': ['c1', 'c2'],
+        'contacts': [
+          {'contactId': 'c1', 'isGuardian': true, 'message': ''},
+          {'contactId': 'c2', 'isGuardian': false, 'message': '회사면 엄마에게'},
+        ],
       });
+    });
+
+    test('태그 상세 연락처의 보호자 여부·메모 (없으면 보호자)', () {
+      final contact = AddressContact.fromJson({'contactId': 'c', 'name': '아빠', 'phone': '01011112222', 'isGuardian': false, 'message': 'm'});
+      expect(contact.isGuardian, isFalse);
+      expect(contact.message, 'm');
+      expect(AddressContact.fromJson({'name': 'x', 'phone': '0'}).isGuardian, isTrue);
     });
   });
 
@@ -117,5 +135,33 @@ void main() {
     expect(tag.acceptedContactCount, 1);
     expect(tag.contacts.map((c) => c.inviteLabel), ['수락', '수락 대기']);
     expect(tag.contacts.first.isAccepted, isTrue);
+  });
+
+  test('대상자 유형·장애·보험 항목을 읽고 그대로 저장 요청에 담는다', () {
+    final person = Person.fromJson({
+      'personId': 'p',
+      'name': '이민호',
+      'personType': 'disabled',
+      'disabilityType': '청각장애',
+      'communication': '필담',
+      'insurances': [
+        {'company': '응급손해보험', 'phone': '1588-0000', 'note': ''},
+        {'company': '든든실손'},
+      ],
+      'publicFields': ['disabilityType', 'insurances'],
+    });
+    expect(person.personType, PersonType.disabled);
+    expect(person.publicFields, {ProfileField.disabilityType, ProfileField.insurances});
+    expect(person.insurances.map((i) => i.company), ['응급손해보험', '든든실손']);
+    final json = person.toJson();
+    expect(json['personType'], 'disabled');
+    expect(json['communication'], '필담');
+    expect((json['insurances'] as List).first, {'company': '응급손해보험', 'phone': '1588-0000', 'note': ''});
+    // 추천 공개 범위: 알레르기는 모든 유형에서 공개, 보험은 기본 비공개
+    for (final type in PersonType.values) {
+      expect(type.recommendedPublic, contains(ProfileField.allergies));
+      expect(type.recommendedPublic, isNot(contains(ProfileField.insurances)));
+    }
+    expect(Person.fromJson({'name': 'x', 'personType': 'unknown'}).personType, PersonType.general);
   });
 }
