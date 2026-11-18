@@ -40,6 +40,12 @@ export const LIMITS = {
   newAlertCooldownMinutes: 1,
   newAlertsPerTagPerDay: 10,
   publicLookupsPerIpPerMinute: 30,
+  /**
+   * 같은 IP 의 신규 신고 (장난 신고 방지, 11/18). 이동통신사는 여러 사용자가 IP 하나를 함께 쓰므로(CGNAT)
+   * 실제 응급 신고가 막히지 않도록 넉넉하게 둔다. 같은 신고에 다시 누르는 것(병합)은 세지 않는다
+   */
+  newAlertsPerIpPer10Minutes: 5,
+  newAlertsPerIpPerDay: 20,
 } as const;
 
 /** 이름을 공개하지 않은 사용자의 공개 화면 표기 */

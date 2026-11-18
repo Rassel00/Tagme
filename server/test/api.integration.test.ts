@@ -295,6 +295,39 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.equal(res.status, 429);
   });
 
+  it('같은 IP 의 신규 신고 제한: 새 신고만 막고, 진행 중인 신고에 다시 누르는 것(병합)은 허용', async () => {
+    // IP 당 1건으로 줄인 서버
+    const limited = createApp({
+      verifyIdToken: fakeVerifier,
+      gatewayKey: GATEWAY_KEY,
+      publicApi: { newAlertIpLimits: [{ windowMs: 60_000, max: 1 }] },
+    }).listen(0);
+    await new Promise<void>((resolve) => limited.once('listening', resolve));
+    const url = `http://127.0.0.1:${(limited.address() as AddressInfo).port}/api/public/tags/${tagId}/alerts`;
+    const post = (cookie?: string) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+        body: JSON.stringify({ action: 'contact' }),
+      });
+    try {
+      // 첫 시도는 IP 제한을 통과하고 (같은 태그라) 1분 쿨다운에 걸린다. 두 번째는 IP 제한에 걸린다
+      const errorCode = async (res: Response) => ((await res.json()) as { error: { code: string } }).error.code;
+      const first = await post();
+      assert.equal(first.status, 429);
+      assert.equal(await errorCode(first), 'too_many_requests');
+      const second = await post();
+      assert.equal(second.status, 429);
+      assert.equal(await errorCode(second), 'too_many_alerts');
+
+      const merged = await post(sessionCookie);
+      assert.equal(merged.status, 200);
+      assert.equal(((await merged.json()) as { isMerged: boolean }).isMerged, true);
+    } finally {
+      await new Promise((resolve) => limited.close(resolve));
+    }
+  });
+
   it('세션 쿠키가 없으면 신고 상태·응급정보를 볼 수 없음 (URL 공유 방지)', async () => {
     assert.equal((await call('GET', `/api/public/alerts/${alertId}`)).status, 403);
     assert.equal((await call('GET', `/api/public/alerts/${alertId}`, { cookie: 'alertSession=forged' })).status, 403);

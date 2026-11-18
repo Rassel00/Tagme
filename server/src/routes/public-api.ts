@@ -96,8 +96,37 @@ async function findNearbyAeds(lat: number, lng: number, limit: number) {
   return [];
 }
 
-export function createPublicApiRouter(): Router {
+export interface RateWindow {
+  windowMs: number;
+  max: number;
+}
+
+/** 같은 IP 의 신규 신고 제한 기본값: 10분 5건, 하루 20건 */
+export const DEFAULT_NEW_ALERT_IP_LIMITS: RateWindow[] = [
+  { windowMs: 10 * 60_000, max: LIMITS.newAlertsPerIpPer10Minutes },
+  { windowMs: 24 * 3_600_000, max: LIMITS.newAlertsPerIpPerDay },
+];
+
+export interface PublicApiOptions {
+  /** 테스트에서 신규 신고 IP 제한을 바꿀 때 */
+  newAlertIpLimits?: RateWindow[];
+}
+
+export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
   const router = Router();
+  // 같은 IP 에서 여러 태그로 번갈아 새 신고를 만드는 장난 신고를 막는다 (태그별 1분·하루 10건 제한과 별도)
+  const newAlertLimiters = (options.newAlertIpLimits ?? DEFAULT_NEW_ALERT_IP_LIMITS).map((window) =>
+    createRateLimiter({ ...window, key: (req) => req.ip ?? 'unknown' }),
+  );
+  const checkNewAlertIp = (ip: string): void => {
+    if (!newAlertLimiters.every((limiter) => limiter.hit(ip))) {
+      throw new ApiError(
+        429,
+        'too_many_alerts',
+        '이 네트워크에서 신고가 너무 많이 접수되었습니다. 잠시 후 다시 시도하세요. 위급하면 119에 신고하세요.',
+      );
+    }
+  };
   // tagId 를 바꿔가며 조회하는 것을 막기 위해 공개 조회는 IP당 분당 30회 (BE-08)
   const lookupLimiter = createRateLimiter({
     windowMs: 60_000,
@@ -141,6 +170,7 @@ export function createPublicApiRouter(): Router {
       if (existing && existing.tagId === tag.id && isAlertOpen(existing, now)) {
         return mergeAlert(client, existing, tag, body, now);
       }
+      checkNewAlertIp(req.ip ?? 'unknown');
       return createAlert(client, tag, body, now);
     });
 
