@@ -60,8 +60,6 @@ export interface AlertStatus {
   insurances?: Insurance[];
   /** 보호자가 [제가 대응할게요]를 누른 시각 (누구인지는 신고자에게 보이지 않는다) */
   guardianRespondingAt?: string | null;
-  /** 승인 중일 때만: 승인한 보호자의 관계·번호 (11/18). 신고자가 바로 전화할 수 있게 */
-  approverContact?: { relation: string; phone: string };
 }
 
 export interface Aed {

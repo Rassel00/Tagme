@@ -420,8 +420,6 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     const status = await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie });
     assert.equal(status.json.accessStatus, 'requested');
     assert.equal(status.json.emergencyInfo, undefined);
-    // 승인 전에는 보호자 번호를 보여 주지 않는다
-    assert.equal(status.json.approverContact, undefined);
   });
 
   it('쿠키 없이 같은 태그로 새 신고는 1분 쿨다운에 걸림', async () => {
@@ -538,15 +536,11 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
         ['실손생명', ''],
       ],
     );
-    // 승인한 보호자(첫 번째 연락처)의 번호만 보인다. 거절한 보호자 번호는 보이지 않는다
-    assert.equal(open.json.approverContact.phone, PHONES[0]);
-    assert.ok(!open.text.includes(PHONES[1]!));
 
     await pool.query(`UPDATE alerts SET approved_until = now() - interval '1 second' WHERE id = $1`, [alertId]);
     const closed = await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie });
     assert.equal(closed.json.accessStatus, 'expired');
     assert.equal(closed.json.emergencyInfo, undefined);
-    assert.equal(closed.json.approverContact, undefined);
   });
 
   it('5분이 지나 다시 연락하면 재알림 (새 승인 링크 포함)', async () => {

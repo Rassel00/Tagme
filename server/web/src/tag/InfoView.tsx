@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import { useInterval, useNow } from '../hooks';
-import { errorMessage, formatBirthDate, formatPhone, remainingText } from '../lib/format';
+import { errorMessage, formatBirthDate, remainingText } from '../lib/format';
 import type { AlertStatus, LatLng, ProfileField, ProfileValues, PublicTag } from '../lib/types';
 import { currentPositionForAlert } from './context';
 import { Topbar } from './Topbar';
@@ -176,20 +176,6 @@ function AccessPanel({
           <p>
             남은 시간 <strong className="timer">{remainingText(alert?.approvedUntil, now)}</strong> · 시간이 지나면 다시 잠깁니다.
           </p>
-          {/* 승인한 보호자에게 바로 전화 (11/18). 승인 중에만 보이고 시간이 지나면 함께 사라진다 */}
-          {alert?.approverContact && (
-            <a
-              className="btn btn-call btn-block"
-              href={`tel:${alert.approverContact.phone.replace(/\D/g, '')}`}
-              aria-label={`보호자에게 전화하기 ${formatPhone(alert.approverContact.phone)}`}
-            >
-              <Icon name="phone" />
-              <span className="btn-call-text">
-                보호자{alert.approverContact.relation ? `(${alert.approverContact.relation})` : ''}에게 전화
-                <small>{formatPhone(alert.approverContact.phone)}</small>
-              </span>
-            </a>
-          )}
         </>
       );
       break;
