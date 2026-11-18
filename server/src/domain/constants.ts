@@ -46,6 +46,8 @@ export const LIMITS = {
    */
   newAlertsPerIpPer10Minutes: 5,
   newAlertsPerIpPerDay: 20,
+  /** 신고자 메모 최대 길이. 보호자 문자가 너무 길어지지 않게 */
+  rescuerMemoMaxLength: 100,
 } as const;
 
 /** 이름을 공개하지 않은 사용자의 공개 화면 표기 */

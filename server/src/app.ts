@@ -48,6 +48,8 @@ export function createApp(options: AppOptions = {}): express.Express {
       });
       res.sendFile(path.join(config.webRoot, file));
     };
+  // 태그 없이 여는 기본 페이지(119·주변 AED 만). 비활성 태그도 웹에서 이 화면으로 보여준다
+  app.get(['/', '/t'], sendPage('t.html'));
   app.get('/t/:tagId', sendPage('t.html'));
   app.get('/a/:approveToken', sendPage('a.html', 'no-referrer'));
   // 태그 없이 주변 AED 만 보는 페이지 (보호자 앱의 "주변 AED 찾기")

@@ -58,6 +58,12 @@ const alertBody = z
     action: z.enum(['contact', 'requestAccess']),
     lat: z.number().min(-90).max(90).optional(),
     lng: z.number().min(-180).max(180).optional(),
+    /** 신고자 메모 (연락처·상황). 줄바꿈·연속 공백은 한 칸으로, 비어 있으면 없음 */
+    memo: z
+      .string()
+      .transform((value) => value.replace(/\s+/g, ' ').trim())
+      .pipe(z.string().max(LIMITS.rescuerMemoMaxLength, `메모는 ${LIMITS.rescuerMemoMaxLength}자까지 쓸 수 있습니다.`))
+      .optional(),
   })
   .refine((b) => (b.lat === undefined) === (b.lng === undefined), '위도와 경도는 함께 보내야 합니다.');
 
@@ -253,12 +259,15 @@ async function mergeAlert(
   const plan = planMergedAlert(alert, body.action, now);
   const lat = alert.lat ?? body.lat ?? null;
   const lng = alert.lng ?? body.lng ?? null;
+  // 다시 연락하며 새 메모를 쓰면 바꾼다 (재알림 문자와 승인 페이지에 최신 메모)
+  const rescuerMemo = body.memo || alert.rescuerMemo;
   await client.query(
-    `UPDATE alerts SET has_contacted = $2, has_requested_access = $3, access_status = $4, lat = $5, lng = $6
+    `UPDATE alerts SET has_contacted = $2, has_requested_access = $3, access_status = $4, lat = $5, lng = $6,
+            rescuer_memo = $7
      WHERE id = $1`,
-    [alert.id, plan.hasContacted, plan.hasRequestedAccess, plan.accessStatus, lat, lng],
+    [alert.id, plan.hasContacted, plan.hasRequestedAccess, plan.accessStatus, lat, lng, rescuerMemo],
   );
-  const updated: AlertRow = { ...alert, ...plan, lat, lng };
+  const updated: AlertRow = { ...alert, ...plan, lat, lng, rescuerMemo };
   const notifiedCount = plan.shouldNotify ? await notifyGuardians(client, updated, tag, now) : 0;
   return { response: { alertId: alert.id, code: alert.code, notifiedCount, isMerged: true } };
 }
@@ -291,8 +300,8 @@ async function createAlert(
 
   const { rows } = await client.query<{ id: string }>(
     `INSERT INTO alerts (id, tag_id, code, lat, lng, session_token_hash, has_contacted, has_requested_access,
-                         access_status, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+                         access_status, created_at, rescuer_memo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
     [
       generateAlertId(),
       tag.id,
@@ -304,6 +313,7 @@ async function createAlert(
       body.action === 'requestAccess',
       accessStatus,
       now,
+      body.memo || null,
     ],
   );
   const alert = (await findAlert(client, 'id', rows[0]!.id))!;

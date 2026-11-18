@@ -21,6 +21,8 @@ describe('웹 페이지 라우트 (DB 불필요)', () => {
   // /t·/aed 는 카카오맵 도메인 확인 때문에 도메인만 보내고(strict-origin), /a 는 아예 보내지 않는다
   for (const [path, title, referrer] of [
     ['/t/SomeTagId', '응급 지원 페이지', 'strict-origin'],
+    ['/', '응급 지원 페이지', 'strict-origin'],
+    ['/t', '응급 지원 페이지', 'strict-origin'],
     ['/aed', '응급 지원 페이지', 'strict-origin'],
     ['/a/SomeApproveToken', '보호자 확인', 'no-referrer'],
   ] as const) {

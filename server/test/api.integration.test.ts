@@ -230,7 +230,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
 
   it('비상연락망 연락: 신고 생성, 보호자 2명 문자 대기, HttpOnly 세션 쿠키', async () => {
     const res = await call('POST', `/api/public/tags/${tagId}/alerts`, {
-      body: { action: 'contact', lat: 37.2939, lng: 126.9744 },
+      body: { action: 'contact', lat: 37.2939, lng: 126.9744, memo: '010-9999-0000\n  역 출구에서 쓰러짐' },
     });
     assert.equal(res.status, 201);
     assert.equal(res.json.notifiedCount, 2);
@@ -243,6 +243,16 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.match(res.setCookie, /Path=\/api\/public/);
     sessionCookie = res.setCookie.split(';')[0]!;
     for (const phone of PHONES) assert.ok(!res.text.includes(phone));
+
+    // 메모는 줄바꿈·공백을 정리해 보호자 문자에 들어간다
+    const { rows } = await pool.query<{ body: string }>('SELECT body FROM sms_jobs WHERE alert_id = $1', [alertId]);
+    assert.equal(rows.length, 2);
+    for (const row of rows) assert.match(row.body, /신고자 메모: 010-9999-0000 역 출구에서 쓰러짐/);
+  });
+
+  it('신고자 메모는 100자까지', async () => {
+    const res = await call('POST', `/api/public/tags/${tagId}/alerts`, { body: { action: 'contact', memo: 'a'.repeat(101) } });
+    assert.equal(res.status, 400);
   });
 
   it('게이트웨이: 키 없으면 401, 대기 문자를 sending 으로 꺼냄', async () => {
@@ -337,6 +347,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     const view = await call('GET', `/api/approvals/${approveTokens[0]}`);
     assert.equal(view.status, 200);
     assert.equal(view.json.userName, '김지우');
+    assert.equal(view.json.alert.rescuerMemo, '010-9999-0000 역 출구에서 쓰러짐');
     assert.equal(view.json.alert.hasRequestedAccess, true);
     assert.equal(view.json.alert.accessStatus, 'requested');
     assert.deepEqual(view.json.alert.location, {

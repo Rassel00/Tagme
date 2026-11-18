@@ -14,6 +14,7 @@ export interface AlertRow {
   lng: number | null;
   rescuerPhone: string | null;
   isRescuerVerified: boolean;
+  rescuerMemo: string | null;
   sessionTokenHash: string;
   hasContacted: boolean;
   hasRequestedAccess: boolean;
@@ -27,7 +28,7 @@ export interface AlertRow {
 
 const ALERT_COLUMNS = `
   id, tag_id AS "tagId", code, lat, lng, rescuer_phone AS "rescuerPhone",
-  is_rescuer_verified AS "isRescuerVerified", session_token_hash AS "sessionTokenHash",
+  is_rescuer_verified AS "isRescuerVerified", rescuer_memo AS "rescuerMemo", session_token_hash AS "sessionTokenHash",
   has_contacted AS "hasContacted", has_requested_access AS "hasRequestedAccess",
   access_status AS "accessStatus", approved_until AS "approvedUntil",
   decided_by_contact_id AS "decidedByContactId", last_notified_at AS "lastNotifiedAt",
@@ -86,6 +87,7 @@ export async function notifyGuardians(
       lng: alert.lng,
       rescuerPhone: alert.rescuerPhone,
       isRescuerVerified: alert.isRescuerVerified,
+      rescuerMemo: alert.rescuerMemo,
       hasRequestedAccess: alert.hasRequestedAccess,
       approveUrl: approveUrl(token),
     });

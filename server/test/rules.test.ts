@@ -132,11 +132,12 @@ describe('문자 템플릿 (7.3)', () => {
     lng: 126.9744,
     rescuerPhone: null,
     isRescuerVerified: false,
+    rescuerMemo: null,
     hasRequestedAccess: false,
     approveUrl: 'https://example.com/a/TOKEN',
   };
 
-  it('이름·메시지·위치·신고자·승인 링크를 담는다', () => {
+  it('이름·메시지·위치·승인 링크를 담고, 신고자 번호가 없으면 그 줄은 뺀다', () => {
     const body = renderGuardianSms(input);
     assert.equal(
       body,
@@ -144,11 +145,15 @@ describe('문자 템플릿 (7.3)', () => {
         '[응급안심] 김지우님 응급 태그가 스캔되었습니다.',
         '지우 응급 태그가 스캔됐어요',
         '위치: https://maps.google.com/?q=37.293900,126.974400',
-        '신고자: 미입력',
         '상황 확인·응급정보 열람 승인:',
         'https://example.com/a/TOKEN',
       ].join('\n'),
     );
+  });
+
+  it('신고자 메모는 위치 앞에 넣는다', () => {
+    const body = renderGuardianSms({ ...input, rescuerMemo: '  010-1111-2222 지하철역에서 쓰러짐 ' });
+    assert.match(body, /신고자 메모: 010-1111-2222 지하철역에서 쓰러짐\n위치: /);
   });
 
   it('이름 없음·위치 없음·열람 요청·인증된 신고자', () => {

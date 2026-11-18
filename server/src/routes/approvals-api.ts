@@ -60,6 +60,7 @@ async function buildView(approval: ApprovalRow, alert: AlertRow, now: Date) {
       location: alert.lat !== null && alert.lng !== null ? { lat: alert.lat, lng: alert.lng, mapUrl: mapUrl(alert.lat, alert.lng) } : null,
       rescuerPhone: alert.rescuerPhone,
       isRescuerVerified: alert.isRescuerVerified,
+      rescuerMemo: alert.rescuerMemo,
       hasContacted: alert.hasContacted,
       hasRequestedAccess: alert.hasRequestedAccess,
       accessStatus: status,
