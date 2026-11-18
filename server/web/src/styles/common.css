@@ -432,3 +432,9 @@ body.is-sub { background: var(--bg); }
 .opt-out-done { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-2) !important; }
 .opt-out-done svg { width: 18px; height: 18px; flex: none; color: var(--green); }
 .opt-out-error { margin-top: 8px !important; color: var(--red-strong) !important; }
+
+/* ---------- 비상연락처 수락 (/c) ---------- */
+.invite-card { padding-bottom: 14px; }
+.invite-points { margin: 4px 0 0; padding-left: 20px; color: var(--text-2); font-size: 14px; }
+.invite-points li + li { margin-top: 6px; }
+.invite-change { margin-top: 10px; }
