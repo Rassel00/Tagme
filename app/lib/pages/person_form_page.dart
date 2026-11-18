@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
@@ -42,6 +43,8 @@ class _PersonFormPageState extends State<PersonFormPage> {
     ProfileField.communication: TextEditingController(text: _person.communication),
     ProfileField.careTips: TextEditingController(text: _person.careTips),
   };
+  /// 생년월일 직접 입력 칸 (YYYY.MM.DD). 달력으로 고르면 이 칸에 채운다 (11/18)
+  late final _birthDate = TextEditingController(text: _person.birthDate.replaceAll('-', '.'));
   bool _isSaving = false;
   bool _isDirty = false;
 
@@ -52,6 +55,7 @@ class _PersonFormPageState extends State<PersonFormPage> {
     for (final c in _controllers.values) {
       c.dispose();
     }
+    _birthDate.dispose();
     for (final d in _insurances) {
       d.dispose();
     }
@@ -87,21 +91,44 @@ class _PersonFormPageState extends State<PersonFormPage> {
     }
   }
 
+  /// 'YYYY.MM.DD' → 있는 날짜(1900년~오늘)면 DateTime, 아니면 null
+  static DateTime? _parseBirthDate(String text) {
+    final digits = text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 8) return null;
+    final y = int.parse(digits.substring(0, 4));
+    final m = int.parse(digits.substring(4, 6));
+    final d = int.parse(digits.substring(6, 8));
+    final date = DateTime(y, m, d);
+    if (date.year != y || date.month != m || date.day != d) return null;
+    if (date.isBefore(DateTime(1900)) || date.isAfter(DateTime.now())) return null;
+    return date;
+  }
+
+  static String _isoDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  void _onBirthDateChanged(String text) {
+    final date = _parseBirthDate(text);
+    setState(() {
+      // 다 입력하기 전이나 없는 날짜면 비워 두고, 저장할 때 검증 메시지를 보여준다
+      _person.birthDate = date == null ? '' : _isoDate(date);
+      _isDirty = true;
+    });
+  }
+
+  /// 달력 아이콘: 달력으로 고른 날짜를 입력 칸에 채운다
   Future<void> _pickBirthDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.tryParse(_person.birthDate) ?? DateTime(2015, 1, 1),
+      initialDate: _parseBirthDate(_birthDate.text) ?? DateTime(2015, 1, 1),
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
-      initialEntryMode: DatePickerEntryMode.input,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       helpText: '생년월일',
     );
     if (picked == null) return;
-    setState(() {
-      _person.birthDate =
-          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      _isDirty = true;
-    });
+    _birthDate.text = _isoDate(picked).replaceAll('-', '.');
+    _onBirthDateChanged(_birthDate.text);
   }
 
   /// 유형을 바꾸면 그 유형의 추천 공개 범위로 바꾼다 (보험 공개 여부는 그대로)
@@ -315,16 +342,21 @@ class _PersonFormPageState extends State<PersonFormPage> {
                   ),
                   _field(
                     ProfileField.birthDate,
-                    InkWell(
-                      onTap: _pickBirthDate,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InputDecorator(
-                        decoration: const InputDecoration(suffixIcon: Icon(Icons.calendar_today, size: 20)),
-                        child: Text(
-                          _person.birthDate.isEmpty
-                              ? '선택하세요'
-                              : '${_person.birthDate.replaceAll('-', '. ')}.${age == null ? '' : ' (만 $age세)'}',
-                          style: TextStyle(color: _person.birthDate.isEmpty ? AppColors.text3 : AppColors.text),
+                    TextFormField(
+                      controller: _birthDate,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [_BirthDateFormatter()],
+                      onChanged: _onBirthDateChanged,
+                      validator: (v) => (v ?? '').isEmpty || _parseBirthDate(v!) != null
+                          ? null
+                          : '생년월일을 YYYY.MM.DD 로 입력하세요 (예: 2015.03.14)',
+                      decoration: InputDecoration(
+                        hintText: 'YYYY.MM.DD (숫자 8자리)',
+                        helperText: age == null ? null : '만 $age세',
+                        suffixIcon: IconButton(
+                          tooltip: '달력에서 고르기',
+                          icon: const Icon(Icons.calendar_today, size: 20),
+                          onPressed: _pickBirthDate,
                         ),
                       ),
                     ),
@@ -462,5 +494,21 @@ class _InsuranceDraft {
     company.dispose();
     phone.dispose();
     note.dispose();
+  }
+}
+
+/// 숫자만 받아 'YYYY.MM.DD' 로 점을 넣는다 (최대 8자리)
+class _BirthDateFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 8) digits = digits.substring(0, 8);
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i == 4 || i == 6) buffer.write('.');
+      buffer.write(digits[i]);
+    }
+    final text = buffer.toString();
+    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
   }
 }
