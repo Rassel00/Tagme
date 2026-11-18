@@ -180,18 +180,21 @@ export function MainView({
           title="비상연락망에 알릴까요?"
           description={`비상연락처 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 연락처 번호는 화면에 표시되지 않습니다.`}
           confirmLabel="알리기"
+          // 신고자 메모 필수 (11/18): 보호자가 신고자에게 먼저 연락하려면 신고자 연락처·상황이 꼭 필요하다
+          isConfirmDisabled={!memo.trim()}
         >
           <label className="sheet-field">
-            <span>신고자 메모 (선택)</span>
+            <span>신고자 메모 (필수)</span>
             <textarea
               name="memo"
               rows={3}
               maxLength={MEMO_MAX_LENGTH}
+              aria-required="true"
               placeholder="신고자 연락처, 현재 상황 등 (예: 010-1234-5678, 길에서 쓰러져 의식 없음)"
               value={memo}
               onChange={(event) => setMemo(event.target.value)}
             />
-            <small>남긴 메모는 보호자 문자에 함께 전달됩니다.</small>
+            <small>보호자가 신고자에게 연락할 수 있게 연락처와 상황을 적어 주세요. 보호자 문자에 함께 전달됩니다.</small>
           </label>
         </Sheet>
       )}

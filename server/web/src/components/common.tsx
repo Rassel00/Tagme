@@ -91,6 +91,7 @@ export function Sheet({
   title,
   description,
   confirmLabel,
+  isConfirmDisabled = false,
   children,
 }: {
   isOpen: boolean;
@@ -100,6 +101,8 @@ export function Sheet({
   title: string;
   description: string;
   confirmLabel: string;
+  /** 필수 입력이 비었을 때 등 확인 버튼을 막는다 */
+  isConfirmDisabled?: boolean;
   /** 설명과 버튼 사이에 넣는 입력 칸 등 */
   children?: ReactNode;
 }) {
@@ -138,7 +141,9 @@ export function Sheet({
         {children}
         <div className="sheet-actions">
           <button className="btn btn-ghost" value="cancel">취소</button>
-          <button className="btn btn-primary" value="confirm">{confirmLabel}</button>
+          <button className="btn btn-primary" value="confirm" disabled={isConfirmDisabled}>
+            {confirmLabel}
+          </button>
         </div>
       </form>
     </dialog>
