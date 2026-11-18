@@ -29,6 +29,8 @@ class _TagEditorPageState extends State<TagEditorPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isDirty = false;
+  /// 비상연락처 수락 상태를 서버에서 다시 불러오는 중 (11/18)
+  bool _isRefreshingInvites = false;
   String? _loadError;
 
   List<Person> _persons = [];
@@ -247,15 +249,43 @@ class _TagEditorPageState extends State<TagEditorPage> {
     }
   }
 
+  /// [확인]: 연락처가 문자 링크에서 수락했는지 서버에서 다시 불러온다
+  Future<void> _refreshInvites() async {
+    setState(() => _isRefreshingInvites = true);
+    try {
+      final tag = await ApiClient.instance.getTag(_savedTag!.tagId);
+      if (!mounted) return;
+      setState(() => _savedTag = tag);
+      showMessage(context, '비상연락처 수락 ${tag.acceptedContactCount}/${tag.contactCount}명');
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString());
+    } finally {
+      if (mounted) setState(() => _isRefreshingInvites = false);
+    }
+  }
+
   /// 저장된 태그의 비상연락처 수락 상태 + 수락 대기면 다시 보내기
   Widget _inviteStatusCard(TagInfo tag) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 12, 10),
+        padding: const EdgeInsets.fromLTRB(18, 10, 12, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('비상연락처 수락', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('비상연락처 수락', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                ),
+                TextButton.icon(
+                  onPressed: _isRefreshingInvites ? null : _refreshInvites,
+                  icon: _isRefreshingInvites
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh, size: 18),
+                  label: const Text('확인'),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             const Text(
               '안내 문자의 링크에서 수락한 사람에게만 신고 알림이 가요.',
@@ -336,7 +366,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
               maxLength: 100,
               onChanged: (_) => _markDirty(),
               decoration: const InputDecoration(
-                hintText: '예: 회사에 있으면 엄마에게 연락해 주세요',
+                hintText: '예: 먼저 전화 주세요',
                 counterText: '',
               ),
             ),
@@ -398,7 +428,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
           controller: _label,
           maxLength: 30,
           onChanged: (_) => _markDirty(),
-          decoration: _boxedDecoration(labelText: '태그 이름 (선택)', hintText: '예: 키링, 책가방, 팔찌'),
+          decoration: _boxedDecoration(labelText: '태그 이름 (선택)', hintText: '예: 키링'),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -431,7 +461,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
 
   Future<void> _copyUrl() async {
     await Clipboard.setData(ClipboardData(text: _savedTag!.url));
-    if (mounted) showMessage(context, 'URL 을 복사했어요. NFC Tools 앱에서 "URL" 레코드로 기록할 수 있어요.');
+    if (mounted) showMessage(context, 'URL 을 복사했어요. NFC 기록 앱에서 "URL" 항목으로 기록하세요.');
   }
 
   Widget _nfcStep() {
@@ -471,13 +501,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
         ),
         if (tag.contacts.isNotEmpty) ...[const SizedBox(height: 12), _inviteStatusCard(tag)],
         const SizedBox(height: 20),
-        const _NfcGuide(),
-        const SizedBox(height: 12),
-        TextButton.icon(
-          onPressed: _copyUrl,
-          icon: const Icon(Icons.copy, size: 18),
-          label: const Text('URL 복사 (NFC Tools 백업용)'),
-        ),
+        _NfcGuide(onCopyUrl: _copyUrl),
       ],
     );
   }
@@ -651,7 +675,10 @@ class _SelectCard extends StatelessWidget {
 }
 
 class _NfcGuide extends StatelessWidget {
-  const _NfcGuide();
+  const _NfcGuide({required this.onCopyUrl});
+
+  /// 4번: 앱으로 기록이 안 될 때 다른 NFC 기록 앱에 붙여 넣을 URL 복사
+  final VoidCallback onCopyUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -659,6 +686,8 @@ class _NfcGuide extends StatelessWidget {
       '폰 설정에서 NFC 를 켜 주세요.',
       '"NFC 태그에 기록"을 누른 뒤 태그를 폰 뒷면 가운데(카메라 아래)에 대세요.',
       '"NFC 등록 완료"가 나올 때까지 태그를 떼지 마세요.',
+      // 앱 이름은 예시로만 언급 (상표 지명 사용, 로고·제휴 표시 없음)
+      'NFC 등록이 되지 않으면 URL 을 복사해 다른 NFC 기록 앱(예: NFC Tools)에서 "URL" 항목으로 기록하세요.',
     ];
     return SectionCard(
       icon: Icons.tips_and_updates_outlined,
@@ -669,6 +698,17 @@ class _NfcGuide extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text('${i + 1}. ${steps[i]}', style: const TextStyle(height: 1.5)),
           ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: TextButton.icon(
+              onPressed: onCopyUrl,
+              icon: const Icon(Icons.copy, size: 18),
+              label: const Text('URL 복사'),
+            ),
+          ),
+        ),
       ],
     );
   }
