@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import { createApp } from '../src/app.js';
+import { CONSENT_VERSION, OPTIONAL_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from '../src/domain/constants.js';
 
 // HTML 은 Vite 빌드 결과(web/dist)를 보낸다. npm test 가 먼저 build:web 을 실행한다
 describe('웹 페이지 라우트 (DB 불필요)', () => {
@@ -46,5 +47,14 @@ describe('웹 페이지 라우트 (DB 불필요)', () => {
     const res = await fetch(baseUrl + script);
     assert.equal(res.status, 200);
     assert.match(res.headers.get('cache-control') ?? '', /immutable/);
+  });
+
+  it('동의 약관 버전은 로그인 없이 조회 (게스트는 동의 후 계정 생성)', async () => {
+    const res = await fetch(`${baseUrl}/api/public/consents`);
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { version: string; required: string[]; optional: string[] };
+    assert.equal(body.version, CONSENT_VERSION);
+    assert.deepEqual(body.required, [...REQUIRED_CONSENT_TYPES]);
+    assert.deepEqual(body.optional, [...OPTIONAL_CONSENT_TYPES]);
   });
 });

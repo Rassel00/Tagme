@@ -6,7 +6,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { getPool, withTransaction, type Queryable } from '../db.js';
-import { LIMITS } from '../domain/constants.js';
+import { CONSENT_VERSION, LIMITS, OPTIONAL_CONSENT_TYPES, REQUIRED_CONSENT_TYPES } from '../domain/constants.js';
 import {
   effectiveAccessStatus,
   isAlertOpen,
@@ -144,6 +144,11 @@ export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
   // 게이트웨이 번호는 신고자 본인 확인 문자(sms: 링크)의 수신 번호라 화면에 노출되는 값이다 (WEB-05)
   router.get('/config', (_req, res) => {
     res.json({ kakaoJsKey: config.kakaoJsKey ?? null, gatewayPhone: config.gatewayPhone ?? null });
+  });
+
+  // 동의 약관 버전·항목 (11/18). 게스트는 동의한 뒤에 계정을 만들므로 로그인 전에 약관 버전을 알아야 한다
+  router.get('/consents', (_req, res) => {
+    res.json({ version: CONSENT_VERSION, required: REQUIRED_CONSENT_TYPES, optional: OPTIONAL_CONSENT_TYPES });
   });
 
   // 주변 AED 가까운 순 (WEB-06). 앱의 "주변 AED 찾기"도 /aed 웹 페이지로 이 API 를 쓴다
