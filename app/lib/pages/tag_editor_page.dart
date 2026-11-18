@@ -212,6 +212,56 @@ class _TagEditorPageState extends State<TagEditorPage> {
     }
   }
 
+  /// 번호 + 이 태그에 이미 연결된 연락처면 수락 상태
+  String _contactSubtitle(AddressContact contact) {
+    final phone = AddressContact.formatPhone(contact.phone);
+    final linked = _savedTag?.contacts.where((c) => c.contactId == contact.contactId).firstOrNull;
+    return linked == null || linked.inviteLabel.isEmpty ? phone : '$phone · ${linked.inviteLabel}';
+  }
+
+  Future<void> _resendInvite(AddressContact contact) async {
+    try {
+      final tag = await ApiClient.instance.resendInvite(_savedTag!.tagId, contact.contactId!);
+      if (!mounted) return;
+      setState(() => _savedTag = tag);
+      showMessage(context, '${contact.name}님에게 수락 안내 문자를 다시 보냈어요.');
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString());
+    }
+  }
+
+  /// 저장된 태그의 비상연락처 수락 상태 + 수락 대기면 다시 보내기
+  Widget _inviteStatusCard(TagInfo tag) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 16, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('비상연락처 수락', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text(
+              '안내 문자의 링크에서 수락한 사람에게만 신고 알림이 가요.',
+              style: TextStyle(fontSize: 13, color: AppColors.text2, height: 1.4),
+            ),
+            const SizedBox(height: 6),
+            for (final contact in tag.contacts)
+              Row(
+                children: [
+                  Expanded(child: Text(contact.title, style: const TextStyle(fontWeight: FontWeight.w600))),
+                  StatusBadge(label: contact.inviteLabel, isPositive: contact.isAccepted),
+                  if (contact.inviteStatus == 'pending')
+                    TextButton(onPressed: () => _resendInvite(contact), child: const Text('다시 보내기'))
+                  else
+                    const SizedBox(width: 12),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _contactStep() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -221,7 +271,10 @@ class _TagEditorPageState extends State<TagEditorPage> {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 4),
-        const Text('태그가 스캔되어 신고가 들어오면 이 사람들에게 위치와 함께 문자가 가요.', style: TextStyle(color: AppColors.text2, height: 1.4)),
+        const Text(
+          '새로 선택한 연락처에는 수락 안내 문자가 가요. 수락한 사람에게만 신고 알림 문자가 가요.',
+          style: TextStyle(color: AppColors.text2, height: 1.4),
+        ),
         const SizedBox(height: 16),
         if (_contacts.isEmpty) const NoticeBox(text: '아직 등록된 비상연락처가 없어요. 아래에서 추가하세요. 추가한 연락처는 "연락처" 탭에서 관리할 수 있어요.'),
         for (final contact in _contacts) ...[
@@ -229,7 +282,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
             isSelected: _contactIds.contains(contact.contactId),
             isCheckbox: true,
             title: contact.title,
-            subtitle: AddressContact.formatPhone(contact.phone),
+            subtitle: _contactSubtitle(contact),
             onTap: () => _toggleContact(contact),
           ),
           const SizedBox(height: 10),
@@ -303,13 +356,17 @@ class _TagEditorPageState extends State<TagEditorPage> {
                   runSpacing: 6,
                   children: [
                     StatusBadge(label: tag.isNfcWritten ? 'NFC 기록됨' : 'NFC 기록 전', isPositive: tag.isNfcWritten),
-                    StatusBadge(label: '비상연락처 ${tag.contactCount}명', isPositive: tag.contactCount > 0),
+                    StatusBadge(
+                      label: '비상연락처 수락 ${tag.acceptedContactCount}/${tag.contactCount}명',
+                      isPositive: tag.acceptedContactCount > 0,
+                    ),
                   ],
                 ),
               ],
             ),
           ),
         ),
+        if (tag.contacts.isNotEmpty) ...[const SizedBox(height: 12), _inviteStatusCard(tag)],
         const SizedBox(height: 20),
         const _NfcGuide(),
         const SizedBox(height: 12),

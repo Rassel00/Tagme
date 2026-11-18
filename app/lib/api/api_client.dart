@@ -138,6 +138,10 @@ class ApiClient {
 
   Future<void> deleteTag(String tagId) => _request('DELETE', '/api/tags/$tagId');
 
+  /// 수락 대기 중인 비상연락처에 수락 안내 문자 다시 보내기 (10분 간격)
+  Future<TagInfo> resendInvite(String tagId, String contactId) async =>
+      TagInfo.fromJson(_map(await _request('POST', '/api/tags/$tagId/contacts/$contactId/invite')));
+
   Future<TagInfo> markNfcWritten(String tagId) async =>
       TagInfo.fromJson(_map(await _request('POST', '/api/tags/$tagId/nfc-written')));
 }

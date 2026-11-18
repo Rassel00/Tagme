@@ -101,7 +101,14 @@ class Person {
 
 /// 주소록 비상연락처. 태그는 이 항목을 참조하므로 고치면 연결된 태그에 모두 반영된다.
 class AddressContact {
-  AddressContact({this.contactId, required this.name, this.relation = '', required this.phone, this.tagCount = 0});
+  AddressContact({
+    this.contactId,
+    required this.name,
+    this.relation = '',
+    required this.phone,
+    this.tagCount = 0,
+    this.inviteStatus,
+  });
 
   final String? contactId;
   final String name;
@@ -111,12 +118,25 @@ class AddressContact {
   final String phone;
   final int tagCount;
 
+  /// 태그 상세의 연락처만: 'pending'(수락 대기) / 'accepted'(수락) / 'declined'(거절). 수락한 연락처에게만 신고 알림이 간다
+  final String? inviteStatus;
+
+  bool get isAccepted => inviteStatus == 'accepted';
+
+  String get inviteLabel => switch (inviteStatus) {
+    'accepted' => '수락',
+    'declined' => '거절',
+    'pending' => '수락 대기',
+    _ => '',
+  };
+
   factory AddressContact.fromJson(Map<String, dynamic> json) => AddressContact(
     contactId: json['contactId'] as String?,
     name: json['name'] as String,
     relation: json['relation'] as String? ?? '',
     phone: json['phone'] as String,
     tagCount: (json['tagCount'] as num?)?.toInt() ?? 0,
+    inviteStatus: json['inviteStatus'] as String?,
   );
 
   Map<String, dynamic> toJson() => {'name': name, 'relation': relation, 'phone': phone};
@@ -190,6 +210,7 @@ class TagInfo {
     required this.personId,
     required this.personName,
     required this.contactCount,
+    this.acceptedContactCount = 0,
     this.contacts = const [],
   });
 
@@ -202,6 +223,9 @@ class TagInfo {
   final String? personId;
   final String? personName;
   final int contactCount;
+
+  /// 수락한 비상연락처 수. 신고 알림은 이 연락처에게만 간다
+  final int acceptedContactCount;
 
   /// 상세 조회일 때만 채워진다
   final List<AddressContact> contacts;
@@ -224,6 +248,7 @@ class TagInfo {
     personId: json['personId'] as String?,
     personName: json['personName'] as String?,
     contactCount: (json['contactCount'] as num?)?.toInt() ?? 0,
+    acceptedContactCount: (json['acceptedContactCount'] as num?)?.toInt() ?? 0,
     contacts: ((json['contacts'] as List?) ?? const [])
         .map((e) => AddressContact.fromJson(e as Map<String, dynamic>))
         .toList(),

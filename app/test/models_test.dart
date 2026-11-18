@@ -102,4 +102,20 @@ void main() {
     ]);
     expect(consentItems.where((i) => !i.isRequired), isEmpty);
   });
+
+  test('태그 연락처 수락 상태와 수락한 연락처 수를 읽는다', () {
+    final tag = TagInfo.fromJson({
+      'tagId': 'T',
+      'url': 'https://example.com/t/T',
+      'contactCount': 2,
+      'acceptedContactCount': 1,
+      'contacts': [
+        {'contactId': 'a', 'name': '엄마', 'phone': '01011112222', 'inviteStatus': 'accepted'},
+        {'contactId': 'b', 'name': '민수', 'phone': '01033334444', 'inviteStatus': 'pending'},
+      ],
+    });
+    expect(tag.acceptedContactCount, 1);
+    expect(tag.contacts.map((c) => c.inviteLabel), ['수락', '수락 대기']);
+    expect(tag.contacts.first.isAccepted, isTrue);
+  });
 }

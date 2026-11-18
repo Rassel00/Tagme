@@ -281,7 +281,12 @@ class _TagCard extends StatelessWidget {
                               label: tag.isNfcWritten ? 'NFC 기록됨' : 'NFC 기록 필요',
                               isPositive: tag.isNfcWritten,
                             ),
-                            StatusBadge(label: '비상연락처 ${tag.contactCount}명', isPositive: tag.contactCount > 0),
+                            StatusBadge(
+                              label: tag.contactCount == tag.acceptedContactCount
+                                  ? '비상연락처 ${tag.contactCount}명'
+                                  : '비상연락처 수락 ${tag.acceptedContactCount}/${tag.contactCount}명',
+                              isPositive: tag.acceptedContactCount > 0,
+                            ),
                             if (tag.personId == null) const StatusBadge(label: '대상자 없음', isPositive: false),
                             if (!tag.isActive) const StatusBadge(label: '사용 중지', isPositive: false),
                           ],
