@@ -244,7 +244,7 @@ class _PersonFormPageState extends State<PersonFormPage> {
                   maxLength: 30,
                   onChanged: (_) => _markDirty(),
                   validator: (v) => (v ?? '').trim().isEmpty ? '보험사를 입력하세요' : null,
-                  decoration: const InputDecoration(labelText: '보험사', hintText: '예: OO손해보험 자동차', counterText: ''),
+                  decoration: const InputDecoration(labelText: '보험사', hintText: '예: OO손해보험', counterText: ''),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -261,7 +261,7 @@ class _PersonFormPageState extends State<PersonFormPage> {
                   controller: draft.note,
                   maxLength: 100,
                   onChanged: (_) => _markDirty(),
-                  decoration: const InputDecoration(labelText: '메모 (선택)', hintText: '예: 증권번호, 가입 상품', counterText: ''),
+                  decoration: const InputDecoration(labelText: '메모 (선택)', hintText: '예: 증권번호', counterText: ''),
                 ),
               ],
             ),
@@ -334,7 +334,7 @@ class _PersonFormPageState extends State<PersonFormPage> {
                     ProfileField.name,
                     _text(
                       ProfileField.name,
-                      hint: '예: 김지우',
+                      hint: '예: 홍길동',
                       maxLength: 30,
                       maxLines: 1,
                       validator: (v) => (v ?? '').trim().isEmpty ? '이름을 입력하세요' : null,
@@ -349,7 +349,7 @@ class _PersonFormPageState extends State<PersonFormPage> {
                       onChanged: _onBirthDateChanged,
                       validator: (v) => (v ?? '').isEmpty || _parseBirthDate(v!) != null
                           ? null
-                          : '생년월일을 YYYY.MM.DD 로 입력하세요 (예: 2015.03.14)',
+                          : 'YYYY.MM.DD 형식으로 입력하세요',
                       decoration: InputDecoration(
                         hintText: 'YYYY.MM.DD (숫자 8자리)',
                         helperText: age == null ? null : '만 $age세',
@@ -383,9 +383,9 @@ class _PersonFormPageState extends State<PersonFormPage> {
                 icon: Icons.favorite,
                 title: '의료정보',
                 children: [
-                  _field(ProfileField.conditions, _text(ProfileField.conditions, hint: '예: 천식')),
-                  _field(ProfileField.allergies, _text(ProfileField.allergies, hint: '예: 페니실린')),
-                  _field(ProfileField.medications, _text(ProfileField.medications, hint: '예: 천식 흡입기 (살부타몰)')),
+                  _field(ProfileField.conditions, _text(ProfileField.conditions, hint: '예: 고혈압')),
+                  _field(ProfileField.allergies, _text(ProfileField.allergies, hint: '예: 땅콩')),
+                  _field(ProfileField.medications, _text(ProfileField.medications, hint: '예: 혈압약')),
                 ],
               ),
               // 장애인 유형이거나 이미 입력한 값이 있으면 보여 준다
@@ -400,17 +400,17 @@ class _PersonFormPageState extends State<PersonFormPage> {
                   children: [
                     _field(
                       ProfileField.disabilityType,
-                      _text(ProfileField.disabilityType, hint: '예: 청각장애, 자폐성 장애', maxLength: 50, maxLines: 1),
+                      _text(ProfileField.disabilityType, hint: '예: 청각장애', maxLength: 50, maxLines: 1),
                     ),
                     _field(
                       ProfileField.communication,
-                      _text(ProfileField.communication, hint: '예: 필담·수어·그림카드', maxLength: 100),
+                      _text(ProfileField.communication, hint: '예: 수어, 필담', maxLength: 100),
                     ),
                     _field(
                       ProfileField.careTips,
                       _text(
                         ProfileField.careTips,
-                        hint: '예: 천천히 짧게 말해 주세요 · 글로 써서 보여 주세요',
+                        hint: '예: 천천히 말해 주세요',
                         maxLength: 200,
                         maxLines: 3,
                       ),

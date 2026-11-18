@@ -83,7 +83,7 @@ class _ContactFormDialogState extends State<_ContactFormDialog> {
             TextFormField(
               controller: _relation,
               maxLength: 20,
-              decoration: const InputDecoration(labelText: '관계 (선택, 예: 엄마, 담임 선생님)', counterText: ''),
+              decoration: const InputDecoration(labelText: '관계 (선택, 예: 가족)', counterText: ''),
             ),
             const SizedBox(height: 10),
             TextFormField(
