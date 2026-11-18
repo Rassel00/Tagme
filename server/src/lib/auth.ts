@@ -13,14 +13,28 @@ export interface AuthUser {
 /** Firebase ID 토큰 검증 함수. 테스트에서는 가짜 구현을 넣는다. */
 export type VerifyIdToken = (idToken: string) => Promise<AuthUser>;
 
+/** Firebase 계정 삭제 함수 (게스트 계정 삭제). 테스트에서는 가짜 구현을 넣는다. */
+export type DeleteAuthUser = (uid: string) => Promise<void>;
+
+function initFirebase(): void {
+  if (!config.firebaseServiceAccount) {
+    throw new ApiError(503, 'auth_not_configured', '서버에 Firebase 설정이 없습니다.');
+  }
+  if (getApps().length === 0) {
+    initializeApp({ credential: cert(JSON.parse(config.firebaseServiceAccount) as object) });
+  }
+}
+
+export function createFirebaseUserDeleter(): DeleteAuthUser {
+  return async (uid) => {
+    initFirebase();
+    await getAuth().deleteUser(uid);
+  };
+}
+
 export function createFirebaseVerifier(): VerifyIdToken {
   return async (idToken) => {
-    if (!config.firebaseServiceAccount) {
-      throw new ApiError(503, 'auth_not_configured', '서버에 Firebase 설정이 없습니다.');
-    }
-    if (getApps().length === 0) {
-      initializeApp({ credential: cert(JSON.parse(config.firebaseServiceAccount) as object) });
-    }
+    initFirebase();
     const decoded = await getAuth().verifyIdToken(idToken);
     return {
       uid: decoded.uid,

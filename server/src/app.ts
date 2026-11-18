@@ -1,7 +1,7 @@
 import path from 'node:path';
 import express from 'express';
 import { config } from './config.js';
-import { createFirebaseVerifier, type VerifyIdToken } from './lib/auth.js';
+import { createFirebaseUserDeleter, createFirebaseVerifier, type DeleteAuthUser, type VerifyIdToken } from './lib/auth.js';
 import { apiNotFoundHandler, errorHandler } from './lib/errors.js';
 import { createAppApiRouter } from './routes/app-api.js';
 import { createApprovalsApiRouter } from './routes/approvals-api.js';
@@ -12,6 +12,8 @@ import { createPublicApiRouter, type PublicApiOptions } from './routes/public-ap
 export interface AppOptions {
   /** 기본은 Firebase. 테스트에서 가짜 검증기를 넣는다. */
   verifyIdToken?: VerifyIdToken;
+  /** 기본은 Firebase. 테스트에서 가짜 삭제 함수를 넣는다. */
+  deleteAuthUser?: DeleteAuthUser;
   gatewayKey?: string;
   /** 테스트에서 공개 API 설정(신규 신고 IP 제한 등)을 바꿀 때 */
   publicApi?: PublicApiOptions;
@@ -31,7 +33,10 @@ export function createApp(options: AppOptions = {}): express.Express {
   app.use('/api/approvals', createApprovalsApiRouter());
   app.use('/api/gateway', createGatewayApiRouter(options.gatewayKey ?? config.gatewayKey));
   // 앱 API 는 마지막: 인증 미들웨어가 /api 아래 나머지 경로 전체에 걸린다
-  app.use('/api', createAppApiRouter(options.verifyIdToken ?? createFirebaseVerifier()));
+  app.use(
+    '/api',
+    createAppApiRouter(options.verifyIdToken ?? createFirebaseVerifier(), options.deleteAuthUser ?? createFirebaseUserDeleter()),
+  );
   app.use('/api', apiNotFoundHandler);
 
   // 응급 지원 웹(/t)·보호자 승인 웹(/a): URL 마다 HTML 하나, 데이터는 클라이언트가 API 로 가져온다.

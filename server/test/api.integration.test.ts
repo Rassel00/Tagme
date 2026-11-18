@@ -19,10 +19,17 @@ const DB_URL = process.env.TEST_DATABASE_URL;
 const GATEWAY_KEY = 'test-gateway-key';
 const PHONES = ['01011112222', '01033334444'];
 
-/** 토큰 "uid:{uid}" 를 그 uid 로 인정하는 가짜 Firebase 검증기 */
+/** 토큰 "uid:{uid}"(게스트)·"google:{uid}"(구글) 를 그 uid 로 인정하는 가짜 Firebase 검증기 */
 const fakeVerifier: VerifyIdToken = async (token) => {
-  if (!token.startsWith('uid:')) throw new Error('invalid token');
-  return { uid: token.slice(4), provider: 'anonymous', email: null };
+  if (token.startsWith('uid:')) return { uid: token.slice(4), provider: 'anonymous', email: null };
+  if (token.startsWith('google:')) return { uid: token.slice(7), provider: 'google', email: 'test@example.com' };
+  throw new Error('invalid token');
+};
+
+/** 게스트 계정 삭제 때 Firebase 대신 기록만 */
+const deletedAuthUsers: string[] = [];
+const fakeDeleteAuthUser = async (uid: string) => {
+  deletedAuthUsers.push(uid);
 };
 
 describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설정' }, () => {
@@ -78,7 +85,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
       await pool.query(await readFile(path.join(dir, file), 'utf8'));
     }
     setPool(pool);
-    server = createApp({ verifyIdToken: fakeVerifier, gatewayKey: GATEWAY_KEY }).listen(0);
+    server = createApp({ verifyIdToken: fakeVerifier, deleteAuthUser: fakeDeleteAuthUser, gatewayKey: GATEWAY_KEY }).listen(0);
     await new Promise<void>((resolve) => server.once('listening', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   });
@@ -309,6 +316,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     // IP 당 1건으로 줄인 서버
     const limited = createApp({
       verifyIdToken: fakeVerifier,
+      deleteAuthUser: fakeDeleteAuthUser,
       gatewayKey: GATEWAY_KEY,
       publicApi: { newAlertIpLimits: [{ windowMs: 60_000, max: 1 }] },
     }).listen(0);
@@ -490,6 +498,23 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.equal((await call('GET', '/api/public/aeds?lat=0&lng=0')).status, 400);
   });
 
+  it('보호자 알림 그만 받기: 이 태그 비상연락처에서 내 번호만 빠진다', async () => {
+    const before = await call('GET', `/api/approvals/${approveTokens[1]}`);
+    assert.equal(before.json.isSubscribed, true);
+    const res = await call('POST', `/api/approvals/${approveTokens[1]}/opt-out`);
+    assert.equal(res.status, 200);
+    assert.equal(res.json.isSubscribed, false);
+    // 다른 보호자는 그대로
+    assert.equal((await call('GET', `/api/approvals/${approveTokens[0]}`)).json.isSubscribed, true);
+    const { rows } = await pool.query<{ count: string }>(
+      'SELECT count(*) FROM tag_contacts tc JOIN tags t ON t.id = tc.tag_id WHERE t.public_id = $1',
+      [tagId],
+    );
+    assert.equal(Number(rows[0]!.count), 1);
+    assert.equal((await call('GET', `/api/public/tags/${tagId}`)).json.contactCount, 1);
+    assert.equal((await call('POST', '/api/approvals/wrong-token/opt-out')).status, 404);
+  });
+
   it('비활성 태그는 410, 신고도 불가', async () => {
     const off = await call('PATCH', `/api/tags/${tagId}/active`, { token: owner, body: { isActive: false } });
     assert.equal(off.json.isActive, false);
@@ -503,5 +528,23 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     await pool.query(`UPDATE alerts SET created_at = now() - interval '25 hours' WHERE id = $1`, [alertId]);
     assert.equal((await call('GET', `/api/approvals/${approveTokens[0]}`)).status, 410);
     assert.equal((await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).status, 410);
+  });
+
+  it('게스트 계정 삭제: 구글 계정은 403, 게스트는 대상자·태그까지 모두 삭제', async () => {
+    const google = await call('DELETE', '/api/users/me', { token: 'google:google-user-1' });
+    assert.equal(google.status, 403);
+    assert.equal(google.json.error.code, 'guest_only');
+
+    const res = await call('DELETE', '/api/users/me', { token: owner });
+    assert.equal(res.status, 204);
+    assert.deepEqual(deletedAuthUsers, ['owner-1']);
+    for (const table of ['users', 'persons', 'contacts', 'tags']) {
+      const { rows } = await pool.query<{ count: string }>(
+        `SELECT count(*) FROM ${table} WHERE ${table === 'users' ? 'id' : 'user_id'} = $1`,
+        ['owner-1'],
+      );
+      assert.equal(Number(rows[0]!.count), 0, table);
+    }
+    assert.equal((await call('GET', `/api/public/tags/${tagId}`)).status, 404);
   });
 });

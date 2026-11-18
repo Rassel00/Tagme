@@ -41,6 +41,20 @@ function assertUsable(approval: ApprovalRow, alert: AlertRow, now: Date): void {
   }
 }
 
+/**
+ * 이 승인 링크를 받은 보호자 번호가 아직 이 태그의 비상연락처인지.
+ * 같은 번호가 연락처 여러 개로 들어간 경우도 함께 보려고 번호로 비교한다
+ */
+async function isStillSubscribed(db: Queryable, approval: ApprovalRow, alert: AlertRow): Promise<boolean> {
+  if (!approval.contactId) return false;
+  const { rowCount } = await db.query(
+    `SELECT 1 FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
+     WHERE tc.tag_id = $1 AND c.phone = (SELECT phone FROM contacts WHERE id = $2)`,
+    [alert.tagId, approval.contactId],
+  );
+  return Boolean(rowCount);
+}
+
 async function buildView(approval: ApprovalRow, alert: AlertRow, now: Date) {
   const { rows } = await getPool().query<{ name: string | null; label: string }>(
     `SELECT p.name, t.label FROM tags t LEFT JOIN persons p ON p.id = t.person_id WHERE t.id = $1`,
@@ -68,6 +82,8 @@ async function buildView(approval: ApprovalRow, alert: AlertRow, now: Date) {
       decidedBy,
     },
     myDecision: approval.decision,
+    /** false 면 이 보호자는 이 태그 알림을 해제했다 (더 이상 문자를 받지 않음) */
+    isSubscribed: await isStillSubscribed(getPool(), approval, alert),
     expiresAt: approval.expiresAt.toISOString(),
     defaultDurationMinutes: LIMITS.defaultApproveMinutes,
   };
@@ -87,6 +103,23 @@ export function createApprovalsApiRouter(): Router {
     const alert = (await findAlert(getPool(), 'id', approval.alertId))!;
     assertUsable(approval, alert, now);
     res.set('Cache-Control', 'no-store');
+    res.json(await buildView(approval, alert, now));
+  });
+
+  // 보호자가 이 태그의 알림을 그만 받기 (11/18). 태그 비상연락처에서 이 번호를 뺀다.
+  // 주인이 관리할 수 없게 된 태그(게스트 로그아웃 등)나 동의 없이 등록된 번호도 보호자가 스스로 끊을 수 있게
+  router.post('/:approveToken/opt-out', async (req, res) => {
+    const now = new Date();
+    const approval = await findApproval(getPool(), param(req, 'approveToken'));
+    const alert = (await findAlert(getPool(), 'id', approval.alertId))!;
+    assertUsable(approval, alert, now);
+    if (approval.contactId) {
+      await getPool().query(
+        `DELETE FROM tag_contacts tc USING contacts c
+         WHERE tc.contact_id = c.id AND tc.tag_id = $1 AND c.phone = (SELECT phone FROM contacts WHERE id = $2)`,
+        [alert.tagId, approval.contactId],
+      );
+    }
     res.json(await buildView(approval, alert, now));
   });
 

@@ -15,7 +15,7 @@ import {
   OPTIONAL_CONSENT_TYPES,
   REQUIRED_CONSENT_TYPES,
 } from '../domain/constants.js';
-import { currentUser, requireAuth, type AuthUser, type VerifyIdToken } from '../lib/auth.js';
+import { currentUser, requireAuth, type AuthUser, type DeleteAuthUser, type VerifyIdToken } from '../lib/auth.js';
 import { ApiError } from '../lib/errors.js';
 import { parseOrThrow } from '../lib/validate.js';
 import { createContactsRouter } from './contacts-api.js';
@@ -71,7 +71,7 @@ const consentBody = z.object({
     .max(CONSENT_TYPES.length),
 });
 
-export function createAppApiRouter(verify: VerifyIdToken): Router {
+export function createAppApiRouter(verify: VerifyIdToken, deleteAuthUser: DeleteAuthUser): Router {
   const router = Router();
   router.use(requireAuth(verify));
 
@@ -92,6 +92,24 @@ export function createAppApiRouter(verify: VerifyIdToken): Router {
       createdAt: row.created_at.toISOString(),
       isConsentRequired: !(await hasRequiredConsents(user.uid)),
     });
+  });
+
+  // 게스트 계정 삭제 (11/18). 게스트는 로그아웃하면 다시 들어올 수 없어, 나갈 때 데이터를 모두 지운다.
+  // 태그가 주인 없이 켜진 채 남아 보호자에게 계속 문자가 가는 것을 막는다.
+  // users 를 지우면 대상자·주소록·태그·신고·문자 기록까지 FK 로 함께 지워진다 (태그 URL 은 404)
+  router.delete('/users/me', async (_req, res) => {
+    const user = currentUser(res.locals);
+    if (user.provider !== 'anonymous') {
+      throw ApiError.forbidden('guest_only', '게스트 계정만 이 방법으로 삭제할 수 있습니다.');
+    }
+    await getPool().query('DELETE FROM users WHERE id = $1', [user.uid]);
+    try {
+      await deleteAuthUser(user.uid);
+    } catch (error) {
+      // 서버 데이터는 이미 지웠다. Firebase 익명 계정이 남아도 앱이 로그아웃하면 다시 쓸 수 없다
+      console.warn('[users] Firebase 계정 삭제 실패', error);
+    }
+    res.status(204).end();
   });
 
   router.get('/consents', async (_req, res) => {
