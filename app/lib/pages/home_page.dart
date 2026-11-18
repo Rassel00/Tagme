@@ -144,6 +144,37 @@ class _TagsTabState extends State<_TagsTab> {
     if (await showNfcWriteSheet(context, tagId: tag.tagId, url: tag.url)) reload();
   }
 
+  Future<void> _delete(TagInfo tag) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${tag.displayName} 태그를 삭제할까요?'),
+        content: Text(
+          [
+            if (tag.isNfcWritten) '이미 기록한 NFC를 대도 응급정보가 보이지 않고 보호자에게 알림도 가지 않아요.',
+            '이 태그의 비상연락처 연결과 신고 기록도 함께 삭제되고, 되돌릴 수 없어요.',
+          ].join('\n\n'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ApiClient.instance.deleteTag(tag.tagId);
+      if (mounted) showMessage(context, '태그를 삭제했어요.');
+      reload();
+    } catch (e) {
+      if (mounted) showMessage(context, e.toString());
+    }
+  }
+
   Future<void> _openAed() async {
     final isOpened = await ExternalLink.open('${AppConfig.apiBaseUrl}/aed');
     if (!isOpened && mounted) showMessage(context, '브라우저를 열 수 없어요.');
@@ -182,7 +213,12 @@ class _TagsTabState extends State<_TagsTab> {
                 : Column(
                     children: [
                       for (final tag in tags) ...[
-                        _TagCard(tag: tag, onTap: () => _openEditor(tag.tagId), onWriteNfc: () => _writeNfc(tag)),
+                        _TagCard(
+                          tag: tag,
+                          onTap: () => _openEditor(tag.tagId),
+                          onWriteNfc: () => _writeNfc(tag),
+                          onDelete: () => _delete(tag),
+                        ),
                         const SizedBox(height: 10),
                       ],
                     ],
@@ -240,11 +276,12 @@ class _AddTagCard extends StatelessWidget {
 }
 
 class _TagCard extends StatelessWidget {
-  const _TagCard({required this.tag, required this.onTap, required this.onWriteNfc});
+  const _TagCard({required this.tag, required this.onTap, required this.onWriteNfc, required this.onDelete});
 
   final TagInfo tag;
   final VoidCallback onTap;
   final VoidCallback onWriteNfc;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +331,11 @@ class _TagCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppColors.text3),
+                  IconButton(
+                    tooltip: '삭제',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: onDelete,
+                  ),
                 ],
               ),
               if (!tag.isNfcWritten) ...[
