@@ -53,7 +53,15 @@ export const LIMITS = {
   newAlertsPerIpPerDay: 20,
   /** 신고자 메모 최대 길이. 보호자 문자가 너무 길어지지 않게 */
   rescuerMemoMaxLength: 100,
+  /** 비상연락처 수락 안내 문자: 사용자당 하루 (남의 번호로 안내 문자를 반복해 보내는 것 방지) */
+  contactInvitesPerUserPerDay: 10,
+  /** 같은 연락처에 안내 문자를 다시 보낼 수 있는 간격 */
+  contactInviteResendMinutes: 10,
 } as const;
+
+/** 태그 비상연락처 수락 상태. accepted 인 연락처에게만 신고 알림을 보낸다 */
+export const INVITE_STATUSES = ['pending', 'accepted', 'declined'] as const;
+export type InviteStatus = (typeof INVITE_STATUSES)[number];
 
 /** 이름을 공개하지 않은 사용자의 공개 화면 표기 */
 export const ANONYMOUS_DISPLAY_NAME = '등록 사용자';

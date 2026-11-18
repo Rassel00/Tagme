@@ -49,7 +49,7 @@ async function isStillSubscribed(db: Queryable, approval: ApprovalRow, alert: Al
   if (!approval.contactId) return false;
   const { rowCount } = await db.query(
     `SELECT 1 FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
-     WHERE tc.tag_id = $1 AND c.phone = (SELECT phone FROM contacts WHERE id = $2)`,
+     WHERE tc.tag_id = $1 AND tc.invite_status = 'accepted' AND c.phone = (SELECT phone FROM contacts WHERE id = $2)`,
     [alert.tagId, approval.contactId],
   );
   return Boolean(rowCount);
@@ -114,8 +114,9 @@ export function createApprovalsApiRouter(): Router {
     const alert = (await findAlert(getPool(), 'id', approval.alertId))!;
     assertUsable(approval, alert, now);
     if (approval.contactId) {
+      // 연결은 남기고 '거절'로: 태그 주인 앱에 거절로 보이고, 다시 수락하려면 수락 링크를 쓴다
       await getPool().query(
-        `DELETE FROM tag_contacts tc USING contacts c
+        `UPDATE tag_contacts tc SET invite_status = 'declined', responded_at = now() FROM contacts c
          WHERE tc.contact_id = c.id AND tc.tag_id = $1 AND c.phone = (SELECT phone FROM contacts WHERE id = $2)`,
         [alert.tagId, approval.contactId],
       );

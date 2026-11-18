@@ -210,7 +210,60 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
 
     const list = await call('GET', '/api/tags', { token: owner });
     assert.equal(list.json[0].contactCount, 2);
+    assert.equal(list.json[0].acceptedContactCount, 0, '새 연락처는 수락 대기');
     assert.equal((await call('GET', '/api/persons', { token: owner })).json[0].tagCount, 1);
+  });
+
+  it('비상연락처 수락: 안내 문자 → 수락한 연락처만 알림 대상, 다시 보내기 규칙', async () => {
+    const tag = await call('GET', `/api/tags/${tagId}`, { token: owner });
+    assert.deepEqual(
+      tag.json.contacts.map((c: { inviteStatus: string }) => c.inviteStatus),
+      ['pending', 'pending'],
+    );
+    // 공개 화면은 수락한 연락처만 센다
+    assert.equal((await call('GET', `/api/public/tags/${tagId}`)).json.contactCount, 0);
+
+    const inviteToken = async (phone: string) => {
+      const { rows } = await pool.query<{ body: string }>(
+        `SELECT body FROM sms_jobs WHERE phone = $1 AND tag_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
+        [phone],
+      );
+      assert.match(rows[0]!.body, /^\[응급안심\] 김지우님의 응급 태그 비상연락처로 회원님 번호가 등록되었습니다\./);
+      return /\/c\/([A-Za-z0-9_-]{43})$/.exec(rows[0]!.body)![1]!;
+    };
+    const momToken = await inviteToken(PHONES[0]!);
+    const view = await call('GET', `/api/invites/${momToken}`);
+    assert.deepEqual(view.json, { userName: '김지우', tagLabel: '키링', status: 'pending' });
+    assert.ok(!view.text.includes(PHONES[1]!), '다른 연락처 번호 비노출');
+    assert.equal((await call('GET', '/api/invites/wrong-token')).status, 404);
+
+    // 거절했다가 같은 링크로 수락할 수 있다
+    assert.equal((await call('POST', `/api/invites/${momToken}`, { body: { decision: 'decline' } })).json.status, 'declined');
+    assert.equal((await call('POST', `/api/invites/${momToken}`, { body: { decision: 'accept' } })).json.status, 'accepted');
+
+    // 다시 보내기: 수락한 연락처는 409, 수락 대기는 10분 뒤에만, 새 링크를 보내면 이전 링크는 무효
+    const resend = (contactId: string) => call('POST', `/api/tags/${tagId}/contacts/${contactId}/invite`, { token: owner });
+    assert.equal((await resend(contactIds[0]!)).status, 409);
+    assert.equal((await resend(contactIds[1]!)).status, 429);
+    const oldToken = await inviteToken(PHONES[1]!);
+    await pool.query(`UPDATE tag_contacts SET invited_at = now() - interval '11 minutes' WHERE contact_id = $1`, [contactIds[1]]);
+    assert.equal((await resend(contactIds[1]!)).status, 200);
+    const newToken = await inviteToken(PHONES[1]!);
+    assert.notEqual(newToken, oldToken);
+    assert.equal((await call('GET', `/api/invites/${oldToken}`)).status, 404);
+    await call('POST', `/api/invites/${newToken}`, { body: { decision: 'accept' } });
+
+    // 태그를 고쳐도(같은 연락처) 수락 상태는 유지되고 안내 문자를 다시 보내지 않는다
+    const before = (await pool.query<{ n: number }>('SELECT count(*)::int AS n FROM sms_jobs WHERE tag_id IS NOT NULL')).rows[0]!.n;
+    const edited = await call('PUT', `/api/tags/${tagId}`, {
+      token: owner,
+      body: { label: '키링', personId, defaultMessage: '긴급상황입니다. 위치 확인 부탁드립니다', contactIds: contactIds.slice(0, 2) },
+    });
+    assert.equal(edited.json.acceptedContactCount, 2);
+    assert.equal((await pool.query<{ n: number }>('SELECT count(*)::int AS n FROM sms_jobs WHERE tag_id IS NOT NULL')).rows[0]!.n, before);
+
+    // 이후 게이트웨이 테스트가 신고 문자만 보도록 안내 문자는 보낸 것으로 처리
+    await pool.query(`UPDATE sms_jobs SET status = 'sent' WHERE tag_id IS NOT NULL`);
   });
 
   it('주소록에서 번호를 고치면 태그에 바로 반영', async () => {
@@ -507,10 +560,16 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     // 다른 보호자는 그대로
     assert.equal((await call('GET', `/api/approvals/${approveTokens[0]}`)).json.isSubscribed, true);
     const { rows } = await pool.query<{ count: string }>(
-      'SELECT count(*) FROM tag_contacts tc JOIN tags t ON t.id = tc.tag_id WHERE t.public_id = $1',
+      `SELECT count(*) FROM tag_contacts tc JOIN tags t ON t.id = tc.tag_id
+       WHERE t.public_id = $1 AND tc.invite_status = 'accepted'`,
       [tagId],
     );
     assert.equal(Number(rows[0]!.count), 1);
+    assert.equal(
+      (await call('GET', `/api/tags/${tagId}`, { token: owner })).json.contacts[1].inviteStatus,
+      'declined',
+      '태그 주인 앱에는 거절로 보인다',
+    );
     assert.equal((await call('GET', `/api/public/tags/${tagId}`)).json.contactCount, 1);
     assert.equal((await call('POST', '/api/approvals/wrong-token/opt-out')).status, 404);
   });
@@ -528,6 +587,20 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     await pool.query(`UPDATE alerts SET created_at = now() - interval '25 hours' WHERE id = $1`, [alertId]);
     assert.equal((await call('GET', `/api/approvals/${approveTokens[0]}`)).status, 410);
     assert.equal((await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).status, 410);
+  });
+
+  it('연락처 번호를 바꾸면 그 연결은 다시 수락 대기', async () => {
+    const res = await call('PUT', `/api/contacts/${contactIds[0]}`, {
+      token: owner,
+      body: { name: '엄마', relation: '가족', phone: '01077770000' },
+    });
+    assert.equal(res.status, 200);
+    const tag = await call('GET', `/api/tags/${tagId}`, { token: owner });
+    assert.equal(tag.json.contacts[0].inviteStatus, 'pending');
+    const { rows } = await pool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM sms_jobs WHERE phone = '01077770000' AND tag_id IS NOT NULL`,
+    );
+    assert.equal(rows[0]!.n, 1);
   });
 
   it('게스트 계정 삭제: 구글 계정은 403, 게스트는 대상자·태그까지 모두 삭제', async () => {

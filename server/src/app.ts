@@ -6,6 +6,7 @@ import { apiNotFoundHandler, errorHandler } from './lib/errors.js';
 import { createAppApiRouter } from './routes/app-api.js';
 import { createApprovalsApiRouter } from './routes/approvals-api.js';
 import { createGatewayApiRouter } from './routes/gateway-api.js';
+import { createInvitesApiRouter } from './routes/invites-api.js';
 import { healthRouter } from './routes/health.js';
 import { createPublicApiRouter, type PublicApiOptions } from './routes/public-api.js';
 
@@ -31,6 +32,7 @@ export function createApp(options: AppOptions = {}): express.Express {
 
   app.use('/api/public', createPublicApiRouter(options.publicApi));
   app.use('/api/approvals', createApprovalsApiRouter());
+  app.use('/api/invites', createInvitesApiRouter());
   app.use('/api/gateway', createGatewayApiRouter(options.gatewayKey ?? config.gatewayKey));
   // 앱 API 는 마지막: 인증 미들웨어가 /api 아래 나머지 경로 전체에 걸린다
   app.use(
@@ -57,6 +59,8 @@ export function createApp(options: AppOptions = {}): express.Express {
   app.get(['/', '/t'], sendPage('t.html'));
   app.get('/t/:tagId', sendPage('t.html'));
   app.get('/a/:approveToken', sendPage('a.html', 'no-referrer'));
+  // 비상연락처 수락·거절 (안내 문자 속 링크)
+  app.get('/c/:inviteToken', sendPage('c.html', 'no-referrer'));
   // 태그 없이 주변 AED 만 보는 페이지 (보호자 앱의 "주변 AED 찾기")
   app.get('/aed', sendPage('t.html'));
   // Vite 가 내용 해시를 붙인 /assets/* 는 내용이 바뀌면 이름도 바뀌므로 오래 캐시한다

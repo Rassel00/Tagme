@@ -28,6 +28,22 @@ export function mapUrl(lat: number, lng: number): string {
   return `https://maps.google.com/?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
+export interface InviteSmsInput {
+  userName: string;
+  inviteUrl: string;
+}
+
+/** 비상연락처 수락 안내 (11/18). 수락해야 신고 알림을 받는다 */
+export function renderInviteSms(input: InviteSmsInput): string {
+  const name = input.userName.trim() || ANONYMOUS_DISPLAY_NAME;
+  return [
+    `[응급안심] ${name}님의 응급 태그 비상연락처로 회원님 번호가 등록되었습니다.`,
+    '수락하면 응급 상황에 위치와 상황 확인 링크를 문자로 받습니다.',
+    '수락·거절:',
+    input.inviteUrl,
+  ].join('\n');
+}
+
 export function renderGuardianSms(input: GuardianSmsInput): string {
   const name = input.userName.trim() || ANONYMOUS_DISPLAY_NAME;
   const location = input.lat !== null && input.lng !== null ? mapUrl(input.lat, input.lng) : '위치 정보 없음';

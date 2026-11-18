@@ -3,11 +3,13 @@
  */
 import { Router } from 'express';
 import { z } from 'zod';
-import { getPool } from '../db.js';
+import { getPool, withTransaction } from '../db.js';
+import { LIMITS } from '../domain/constants.js';
 import { currentUser } from '../lib/auth.js';
 import { ApiError } from '../lib/errors.js';
 import { param } from '../lib/http.js';
 import { parseOrThrow, phoneSchema } from '../lib/validate.js';
+import { countRecentInvites, sendContactInvite } from '../services/invites.js';
 
 const MAX_CONTACTS_PER_USER = 20;
 
@@ -75,12 +77,28 @@ export function createContactsRouter(): Router {
     const user = currentUser(res.locals);
     const contact = await requireOwnedContact(param(req, 'contactId'), user.uid);
     const body = parseOrThrow(contactBody, req.body);
-    await getPool().query('UPDATE contacts SET name = $2, relation = $3, phone = $4 WHERE id = $1', [
-      contact.id,
-      body.name,
-      body.relation,
-      body.phone,
-    ]);
+    // 번호가 바뀌면 다른 사람일 수 있으므로 연결된 태그마다 다시 수락을 받는다
+    const isPhoneChanged = body.phone !== contact.phone;
+    const { rows: links } = await getPool().query<{ tag_id: string }>(
+      'SELECT tag_id FROM tag_contacts WHERE contact_id = $1',
+      [contact.id],
+    );
+    if (isPhoneChanged && links.length > 0) {
+      if ((await countRecentInvites(getPool(), user.uid)) + links.length > LIMITS.contactInvitesPerUserPerDay) {
+        throw ApiError.tooManyRequests(
+          `비상연락처 수락 안내는 하루 ${LIMITS.contactInvitesPerUserPerDay}건까지 보낼 수 있습니다. 내일 다시 시도하세요.`,
+        );
+      }
+    }
+    await withTransaction(async (client) => {
+      await client.query('UPDATE contacts SET name = $2, relation = $3, phone = $4 WHERE id = $1', [
+        contact.id,
+        body.name,
+        body.relation,
+        body.phone,
+      ]);
+      if (isPhoneChanged) for (const link of links) await sendContactInvite(client, link.tag_id, contact.id);
+    });
     res.json(contactJson(await requireOwnedContact(contact.id, user.uid)));
   });
 

@@ -63,10 +63,10 @@ export async function notifyGuardians(
   tag: { id: string; userId: string; defaultMessage: string },
   now: Date,
 ): Promise<number> {
-  // 주소록을 참조하므로 보호자가 번호를 고치면 바로 새 번호로 보낸다
+  // 주소록을 참조하므로 보호자가 번호를 고치면 바로 새 번호로 보낸다. 수락한 연락처에게만 (11/18)
   const { rows: contacts } = await client.query<{ id: string; phone: string; message: string | null }>(
     `SELECT c.id, c.phone, tc.message FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
-     WHERE tc.tag_id = $1 ORDER BY tc.sort_order`,
+     WHERE tc.tag_id = $1 AND tc.invite_status = 'accepted' ORDER BY tc.sort_order`,
     [tag.id],
   );
   if (contacts.length === 0) return 0;

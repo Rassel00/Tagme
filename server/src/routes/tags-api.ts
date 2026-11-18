@@ -5,12 +5,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { getPool, withTransaction } from '../db.js';
-import { LIMITS } from '../domain/constants.js';
+import { LIMITS, type InviteStatus } from '../domain/constants.js';
 import { currentUser } from '../lib/auth.js';
 import { ApiError } from '../lib/errors.js';
 import { param } from '../lib/http.js';
 import { generatePublicId } from '../lib/ids.js';
 import { parseOrThrow } from '../lib/validate.js';
+import { countRecentInvites, sendContactInvite } from '../services/invites.js';
 import { requireOwnedPerson } from './persons-api.js';
 
 const MAX_TAGS_PER_USER = 10;
@@ -30,12 +31,15 @@ interface TagRow {
   person_id: string | null;
   person_name: string | null;
   contact_count: number;
+  accepted_contact_count: number;
 }
 
 const SELECT_TAGS = `
   SELECT t.id, t.public_id, t.label, t.default_message, t.is_active, t.nfc_written_at, t.created_at,
          t.person_id, p.name AS person_name,
-         (SELECT count(*)::int FROM tag_contacts tc WHERE tc.tag_id = t.id) AS contact_count
+         (SELECT count(*)::int FROM tag_contacts tc WHERE tc.tag_id = t.id) AS contact_count,
+         (SELECT count(*)::int FROM tag_contacts tc WHERE tc.tag_id = t.id AND tc.invite_status = 'accepted')
+           AS accepted_contact_count
   FROM tags t LEFT JOIN persons p ON p.id = t.person_id`;
 
 function tagSummary(row: TagRow) {
@@ -50,6 +54,8 @@ function tagSummary(row: TagRow) {
     personId: row.person_id,
     personName: row.person_name,
     contactCount: row.contact_count,
+    /** 수락한 연락처 수. 신고 알림은 이 연락처에게만 간다 */
+    acceptedContactCount: row.accepted_contact_count,
   };
 }
 
@@ -65,14 +71,30 @@ async function requireOwnedTag(publicId: string, userId: string): Promise<TagRow
 
 async function tagDetail(publicId: string, userId: string) {
   const tag = await requireOwnedTag(publicId, userId);
-  const { rows: contacts } = await getPool().query<{ id: string; name: string; relation: string; phone: string }>(
-    `SELECT c.id, c.name, c.relation, c.phone FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
+  const { rows: contacts } = await getPool().query<{
+    id: string;
+    name: string;
+    relation: string;
+    phone: string;
+    invite_status: InviteStatus;
+    invited_at: Date | null;
+  }>(
+    `SELECT c.id, c.name, c.relation, c.phone, tc.invite_status, tc.invited_at
+     FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
      WHERE tc.tag_id = $1 ORDER BY tc.sort_order`,
     [tag.id],
   );
   return {
     ...tagSummary(tag),
-    contacts: contacts.map((c) => ({ contactId: c.id, name: c.name, relation: c.relation, phone: c.phone })),
+    contacts: contacts.map((c) => ({
+      contactId: c.id,
+      name: c.name,
+      relation: c.relation,
+      phone: c.phone,
+      /** pending: 수락 대기 (알림 안 감) / accepted: 수락 / declined: 거절 */
+      inviteStatus: c.invite_status,
+      invitedAt: c.invited_at?.toISOString() ?? null,
+    })),
   };
 }
 
@@ -102,6 +124,25 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
       throw ApiError.badRequest('주소록에 없는 연락처가 포함되어 있습니다.');
     }
   }
+  // 이미 연결된 연락처는 수락 상태를 유지하고, 새로 연결한 연락처에만 수락 안내 문자를 보낸다
+  const { rows: existing } = await getPool().query<{
+    contact_id: string;
+    invite_status: InviteStatus;
+    invite_token_hash: string | null;
+    invited_at: Date | null;
+    responded_at: Date | null;
+  }>(
+    'SELECT contact_id, invite_status, invite_token_hash, invited_at, responded_at FROM tag_contacts WHERE tag_id = $1',
+    [tagId],
+  );
+  const kept = new Map(existing.map((row) => [row.contact_id, row]));
+  const added = body.contactIds.filter((id) => !kept.has(id));
+  if (added.length > 0 && (await countRecentInvites(getPool(), userId)) + added.length > LIMITS.contactInvitesPerUserPerDay) {
+    throw ApiError.tooManyRequests(
+      `비상연락처 수락 안내는 하루 ${LIMITS.contactInvitesPerUserPerDay}건까지 보낼 수 있습니다. 내일 다시 시도하세요.`,
+    );
+  }
+
   await withTransaction(async (client) => {
     await client.query(
       'UPDATE tags SET label = $2, default_message = $3, person_id = $4, updated_at = now() WHERE id = $1',
@@ -109,12 +150,23 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
     );
     await client.query('DELETE FROM tag_contacts WHERE tag_id = $1', [tagId]);
     for (const [index, contactId] of body.contactIds.entries()) {
-      await client.query('INSERT INTO tag_contacts (tag_id, contact_id, sort_order) VALUES ($1, $2, $3)', [
-        tagId,
-        contactId,
-        index,
-      ]);
+      const prev = kept.get(contactId);
+      await client.query(
+        `INSERT INTO tag_contacts (tag_id, contact_id, sort_order, invite_status, invite_token_hash, invited_at, responded_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          tagId,
+          contactId,
+          index,
+          prev?.invite_status ?? 'pending',
+          prev?.invite_token_hash ?? null,
+          prev?.invited_at ?? null,
+          prev?.responded_at ?? null,
+        ],
+      );
     }
+    // 대상자 이름이 들어가므로 대상자를 반영한 뒤에 보낸다
+    for (const contactId of added) await sendContactInvite(client, tagId, contactId);
   });
 }
 
@@ -174,6 +226,32 @@ export function createTagsRouter(): Router {
     const user = currentUser(res.locals);
     const tag = await requireOwnedTag(param(req, 'tagId'), user.uid);
     await getPool().query('UPDATE tags SET nfc_written_at = now(), updated_at = now() WHERE id = $1', [tag.id]);
+    res.json(await tagDetail(tag.public_id, user.uid));
+  });
+
+  // 수락 대기 중인 연락처에 안내 문자 다시 보내기 (거절·수락한 연락처는 불가, 10분 간격)
+  router.post('/:tagId/contacts/:contactId/invite', async (req, res) => {
+    const user = currentUser(res.locals);
+    const tag = await requireOwnedTag(param(req, 'tagId'), user.uid);
+    const contactId = param(req, 'contactId');
+    if (!z.uuid().safeParse(contactId).success) throw ApiError.notFound('contact_not_found', '연락처를 찾을 수 없습니다.');
+    const { rows } = await getPool().query<{ invite_status: InviteStatus; invited_at: Date | null }>(
+      'SELECT invite_status, invited_at FROM tag_contacts WHERE tag_id = $1 AND contact_id = $2',
+      [tag.id, contactId],
+    );
+    const link = rows[0];
+    if (!link) throw ApiError.notFound('contact_not_found', '이 태그에 연결된 연락처가 아닙니다.');
+    if (link.invite_status !== 'pending') {
+      throw new ApiError(409, 'invite_not_pending', '수락 대기 중인 연락처에만 다시 보낼 수 있습니다.');
+    }
+    const waitMs = LIMITS.contactInviteResendMinutes * 60_000;
+    if (link.invited_at && Date.now() - link.invited_at.getTime() < waitMs) {
+      throw ApiError.tooManyRequests(`안내 문자는 ${LIMITS.contactInviteResendMinutes}분 뒤에 다시 보낼 수 있습니다.`);
+    }
+    if ((await countRecentInvites(getPool(), user.uid)) >= LIMITS.contactInvitesPerUserPerDay) {
+      throw ApiError.tooManyRequests(`비상연락처 수락 안내는 하루 ${LIMITS.contactInvitesPerUserPerDay}건까지 보낼 수 있습니다.`);
+    }
+    await withTransaction((client) => sendContactInvite(client, tag.id, contactId));
     res.json(await tagDetail(tag.public_id, user.uid));
   });
 

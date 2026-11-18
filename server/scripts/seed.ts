@@ -72,7 +72,8 @@ async function main(): Promise<void> {
         'INSERT INTO contacts (user_id, name, relation, phone) VALUES ($1, $2, $3, $4) RETURNING id',
         [SEED_USER_ID, contact.name, contact.relation, phone],
       );
-      await client.query('INSERT INTO tag_contacts (tag_id, contact_id, sort_order) VALUES ($1, $2, $3)', [
+      // 시연용 번호는 사용자 동의를 받은 번호라 수락된 상태로 넣는다
+      await client.query("INSERT INTO tag_contacts (tag_id, contact_id, sort_order, invite_status) VALUES ($1, $2, $3, 'accepted')", [
         tagId,
         saved.rows[0]!.id,
         index,

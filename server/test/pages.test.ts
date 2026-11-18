@@ -26,6 +26,7 @@ describe('웹 페이지 라우트 (DB 불필요)', () => {
     ['/t', '응급 지원 페이지', 'strict-origin'],
     ['/aed', '응급 지원 페이지', 'strict-origin'],
     ['/a/SomeApproveToken', '보호자 확인', 'no-referrer'],
+    ['/c/SomeInviteToken', '비상연락처 등록 확인', 'no-referrer'],
   ] as const) {
     it(`${path} 는 HTML 을 주고 주소 경로가 새지 않게 막는다`, async () => {
       const res = await fetch(baseUrl + path);

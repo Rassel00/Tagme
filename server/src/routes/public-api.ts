@@ -161,7 +161,7 @@ export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
   router.get('/tags/:tagId', lookupLimiter, async (req, res) => {
     const tag = await findActiveTag(param(req, 'tagId'));
     const person = await findPersonForTag(getPool(), tag.id);
-    const { rows } = await getPool().query<{ count: string }>('SELECT count(*) FROM tag_contacts WHERE tag_id = $1', [tag.id]);
+    const { rows } = await getPool().query<{ count: string }>("SELECT count(*) FROM tag_contacts WHERE tag_id = $1 AND invite_status = 'accepted'", [tag.id]);
     res.set('Cache-Control', 'no-store');
     res.json({ ...toPublicView(person), contactCount: Number(rows[0]?.count ?? 0) });
   });
