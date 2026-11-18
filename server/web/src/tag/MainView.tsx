@@ -127,13 +127,13 @@ export function MainView({
         {isBasic ? (
           <button type="button" className="menu-item" aria-disabled="true">
             <Icon name="heart" className="menu-icon" />
-            <span className="menu-label">사용자 응급정보 확인</span>
+            <span className="menu-label">추가 정보 확인</span>
             <Icon name="chevron" className="menu-chevron" />
           </button>
         ) : (
           <a className="menu-item" href="#info">
             <Icon name="heart" className="menu-icon" />
-            <span className="menu-label">사용자 응급정보 확인</span>
+            <span className="menu-label">추가 정보 확인</span>
             <Icon name="chevron" className="menu-chevron" />
           </a>
         )}
@@ -165,7 +165,7 @@ export function MainView({
       <p className="footnote">
         <Icon name="warn" />
         {isBasic
-          ? '응급정보 확인과 비상연락망 연락은 등록된 응급 태그를 대면 사용할 수 있습니다.'
+          ? '추가 정보 확인과 비상연락망 연락은 등록된 응급 태그를 대면 사용할 수 있습니다.'
           : '해당 정보는 응급상황 대응을 위한 최소한의 정보만 제공됩니다.'}
       </p>
 

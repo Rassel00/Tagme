@@ -27,7 +27,7 @@ export function InsuranceView({
             <Icon name="lock" />
             보험 {tag.insuranceCount}개 · 비공개
           </p>
-          <p>비공개 정보는 "사용자 응급정보 확인"에서 보호자에게 열람을 요청하고, 승인되면 이 화면에 보여요.</p>
+          <p>비공개 정보는 "추가 정보 확인"에서 보호자에게 열람을 요청하고, 승인되면 이 화면에 보여요.</p>
         </div>
       ) : (
         insurances.map((insurance, index) => (
