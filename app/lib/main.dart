@@ -10,6 +10,7 @@ import 'pages/home_page.dart';
 import 'pages/start_page.dart';
 import 'services/auth_service.dart';
 import 'theme.dart';
+import 'widgets/sign_out_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -91,7 +92,7 @@ class _RegisteredGateState extends State<_RegisteredGate> {
                 Text(_error!, textAlign: TextAlign.center),
                 const SizedBox(height: 12),
                 FilledButton(onPressed: _register, child: const Text('다시 시도')),
-                TextButton(onPressed: AuthService.instance.signOut, child: const Text('로그아웃')),
+                TextButton(onPressed: () => confirmSignOut(context), child: const Text('로그아웃')),
               ],
             ),
           ),

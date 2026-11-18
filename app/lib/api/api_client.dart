@@ -77,6 +77,9 @@ class ApiClient {
   // ---------------------------------------------------------------- 사용자·동의
 
   /// 로그인·계정 연결 직후 호출. 사용자 생성 또는 갱신. @return 필수 동의가 필요한지
+  /// 게스트 계정 삭제. 서버에서 대상자·연락처·태그까지 모두 지운다 (게스트만 가능)
+  Future<void> deleteMe() => _request('DELETE', '/api/users/me');
+
   Future<bool> registerMe() async =>
       _map(await _request('POST', '/api/users/me'))['isConsentRequired'] as bool? ?? true;
 

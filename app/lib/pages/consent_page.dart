@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
 import '../api/models.dart';
-import '../services/auth_service.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/sign_out_dialog.dart';
 
 /// 개인정보 동의 (APP-02). 필수 항목 전체 동의 시 진행, 약관 버전이 바뀌면 다시 보여준다.
 class ConsentPage extends StatefulWidget {
@@ -62,7 +62,7 @@ class _ConsentPageState extends State<ConsentPage> {
       appBar: AppBar(
         title: const Text('개인정보 동의'),
         automaticallyImplyLeading: false,
-        actions: [TextButton(onPressed: AuthService.instance.signOut, child: const Text('나가기'))],
+        actions: [TextButton(onPressed: () => confirmSignOut(context), child: const Text('나가기'))],
       ),
       body: _version == null
           ? const Center(child: CircularProgressIndicator())

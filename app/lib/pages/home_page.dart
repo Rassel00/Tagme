@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/external_link.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/sign_out_dialog.dart';
 import 'contact_form_dialog.dart';
 import 'guide_page.dart';
 import 'nfc_write_sheet.dart';
@@ -578,26 +579,6 @@ class _SettingsTabState extends State<_SettingsTab> {
     }
   }
 
-  Future<void> _signOut() async {
-    final isGuest = FirebaseAuth.instance.currentUser?.isAnonymous ?? false;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('로그아웃할까요?'),
-        content: Text(
-          isGuest
-              ? '게스트로 사용 중이에요. 로그아웃하면 이 계정으로 다시 들어올 수 없어 등록한 태그·정보를 수정할 수 없게 됩니다. 먼저 구글 계정을 연결하는 것을 권해요.'
-              : '다시 구글로 로그인하면 이어서 사용할 수 있어요.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('로그아웃')),
-        ],
-      ),
-    );
-    if (ok == true) await AuthService.instance.signOut();
-  }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -621,7 +602,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                       isGuest ? '게스트' : (user?.email ?? '구글 계정'),
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text(isGuest ? '앱을 지우면 정보를 수정할 수 없어요' : '구글 계정으로 로그인됨'),
+                    subtitle: Text(isGuest ? '구글 계정을 연결해야 다른 폰에서도 이어서 쓸 수 있어요' : '구글 계정으로 로그인됨'),
                   ),
                   if (isGuest) ...[
                     const Divider(height: 1),
@@ -648,7 +629,16 @@ class _SettingsTabState extends State<_SettingsTab> {
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GuidePage())),
                   ),
                   const Divider(height: 1),
-                  ListTile(leading: const Icon(Icons.logout), title: const Text('로그아웃'), onTap: _signOut),
+                  // 게스트는 로그아웃 대신 계정 삭제 (로그아웃하면 다시 들어올 수 없어 태그가 주인 없이 남는다)
+                  ListTile(
+                    leading: Icon(isGuest ? Icons.delete_outline : Icons.logout, color: isGuest ? AppColors.red : null),
+                    title: Text(
+                      isGuest ? '게스트 계정 삭제' : '로그아웃',
+                      style: isGuest ? const TextStyle(color: AppColors.red) : null,
+                    ),
+                    subtitle: isGuest ? const Text('등록한 대상자·태그·연락처가 모두 삭제돼요') : null,
+                    onTap: () => confirmSignOut(context),
+                  ),
                 ],
               ),
             ),
