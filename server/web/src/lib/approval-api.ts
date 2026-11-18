@@ -14,6 +14,8 @@ export interface ApprovalView {
     location: { lat: number; lng: number; mapUrl: string } | null;
     rescuerPhone: string | null;
     isRescuerVerified: boolean;
+    /** 신고자가 비상연락망 연락 확인 팝업에 남긴 메모 */
+    rescuerMemo: string | null;
     hasContacted: boolean;
     hasRequestedAccess: boolean;
     accessStatus: AccessStatus;
@@ -59,6 +61,7 @@ function createMockApprovalApi(state: string | null): ApprovalApi {
           : { lat: 37.2939, lng: 126.9744, mapUrl: 'https://maps.google.com/?q=37.293900,126.974400' },
       rescuerPhone: '01098765432',
       isRescuerVerified: state !== 'nolocation',
+      rescuerMemo: state === 'nolocation' ? null : '010-9876-5432 학생회관 앞에서 쓰러져 의식 없음',
       hasContacted: true,
       hasRequestedAccess: true,
       accessStatus: 'requested',

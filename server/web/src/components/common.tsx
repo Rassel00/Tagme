@@ -91,6 +91,7 @@ export function Sheet({
   title,
   description,
   confirmLabel,
+  children,
 }: {
   isOpen: boolean;
   onClose: (returnValue: string) => void;
@@ -99,6 +100,8 @@ export function Sheet({
   title: string;
   description: string;
   confirmLabel: string;
+  /** 설명과 버튼 사이에 넣는 입력 칸 등 */
+  children?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const onCloseRef = useRef(onClose);
@@ -131,6 +134,7 @@ export function Sheet({
         </div>
         <h2 id="sheet-title">{title}</h2>
         <p>{description}</p>
+        {children}
         <div className="sheet-actions">
           <button className="btn btn-ghost" value="cancel">취소</button>
           <button className="btn btn-primary" value="confirm">{confirmLabel}</button>

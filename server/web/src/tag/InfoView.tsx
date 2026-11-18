@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import { useInterval, useNow } from '../hooks';
 import { errorMessage, formatBirthDate, remainingText } from '../lib/format';
@@ -23,15 +23,12 @@ export function InfoView({
   onBack,
   onRequestAccess,
   onExpired,
-  rescuerCard,
 }: {
   tag: PublicTag;
   alert?: AlertStatus;
   onBack: () => void;
   onRequestAccess: (position: LatLng | null) => Promise<void>;
   onExpired: () => void;
-  /** 신고가 생긴 뒤 보이는 신고자 연락처 카드 (WEB-05) */
-  rescuerCard?: ReactNode;
 }) {
   const unlocked: ProfileValues = alert?.accessStatus === 'approved' ? alert.emergencyInfo ?? {} : {};
 
@@ -79,7 +76,6 @@ export function InfoView({
       {tag.lockedFields.length > 0 && (
         <AccessPanel lockedCount={tag.lockedFields.length} alert={alert} onRequestAccess={onRequestAccess} onExpired={onExpired} />
       )}
-      {rescuerCard && <div className="rescuer-wrap">{rescuerCard}</div>}
     </section>
   );
 }

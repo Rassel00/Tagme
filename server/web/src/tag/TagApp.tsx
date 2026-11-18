@@ -1,9 +1,9 @@
 /**
- * 응급 지원 웹 /t/{tagId} (WEB-01~04, WEB-06), /aed
+ * 응급 지원 웹 /t/{tagId} (WEB-01~04, WEB-06), 기본 페이지 / · /t, 주변 AED /aed
  * 화면: #(메인) / #info(응급정보) / #aed(주변 AED). 해시로 전환해 뒤로가기가 자연스럽게 동작한다.
+ * 기본 페이지(태그 없이 열거나 비활성 태그)는 119 신고와 주변 AED 찾기만 쓸 수 있다.
  */
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { getPublicConfig } from '../lib/api';
 import { ErrorView, Loading } from '../components/common';
 import { IconSprite } from '../components/Icon';
 import { useHashRoute, useInterval } from '../hooks';
@@ -14,39 +14,30 @@ import { AedView } from './AedView';
 import { api, isAedOnly, readStoredAlertId, storeAlertId, tagId } from './context';
 import { InfoView } from './InfoView';
 import { MainView } from './MainView';
-import { RescuerCard } from './RescuerCard';
 
 const POLL_INTERVAL_MS = 3000;
-/** 본인 확인 문자를 기다리는 최대 시간. 넘으면 폴링을 멈춘다 (문자를 안 보냈을 수 있음) */
-const VERIFICATION_WAIT_MS = 5 * 60_000;
 
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; tag: PublicTag }
+  /** 기본 페이지: 태그 없이 열었거나 태그 주인이 비활성화한 태그 */
+  | { kind: 'basic' }
   | { kind: 'error'; title: string; description: string };
 
 function loadErrorState(error: unknown): LoadState {
+  // 비활성 태그는 안내 없이 기본 페이지로 (태그 주인이 끈 태그의 정보·연락 기능을 막는다)
+  if (error instanceof ApiRequestError && error.status === 410) return { kind: 'basic' };
   if (error instanceof ApiRequestError && error.status === 404) {
     return { kind: 'error', title: '등록되지 않은 태그입니다', description: '태그 정보를 찾을 수 없습니다. 위급하면 바로 119에 신고하세요.' };
-  }
-  if (error instanceof ApiRequestError && error.status === 410) {
-    return { kind: 'error', title: '사용이 중지된 태그입니다', description: '태그 주인이 이 태그를 비활성화했습니다. 위급하면 바로 119에 신고하세요.' };
   }
   return { kind: 'error', title: '정보를 불러오지 못했습니다', description: `${errorMessage(error)} 위급하면 바로 119에 신고하세요.` };
 }
 
 export function TagApp() {
-  const [load, setLoad] = useState<LoadState>(() =>
-    isAedOnly || tagId
-      ? { kind: 'loading' }
-      : { kind: 'error', title: '잘못된 주소입니다', description: '태그를 다시 대 주세요. 위급하면 바로 119에 신고하세요.' },
-  );
+  const [load, setLoad] = useState<LoadState>(() => (tagId ? { kind: 'loading' } : { kind: 'basic' }));
   const [alertId, setAlertId] = useState(readStoredAlertId);
   const [alert, setAlert] = useState<AlertStatus>();
   const [aedPosition, setAedPosition] = useState<LatLng>();
-  const [gatewayPhone, setGatewayPhone] = useState<string | null>(null);
-  /** [문자로 본인 확인]을 누른 시각. 인증되거나 시간이 지나면 undefined */
-  const [verificationStartedAt, setVerificationStartedAt] = useState<number>();
   const { route, goBack } = useHashRoute();
 
   /** 신고 상태 갱신. 세션 쿠키가 없거나(403) 신고가 종료됨(410) → 새 신고를 만들 수 있게 초기화 */
@@ -63,28 +54,15 @@ export function TagApp() {
     }
   }
 
-  async function createAlert(action: AlertAction, position: LatLng | null): Promise<CreateAlertResult> {
-    const result = await api.createAlert(action, position);
+  async function createAlert(action: AlertAction, position: LatLng | null, memo?: string): Promise<CreateAlertResult> {
+    const result = await api.createAlert(action, position, memo);
     setAlertId(result.alertId);
     storeAlertId(result.alertId);
     return result;
   }
 
-  async function setRescuerPhone(phone: string): Promise<void> {
-    if (!alertId) return;
-    try {
-      const result = await api.setRescuerPhone(alertId, phone);
-      setAlert((previous) => previous && { ...previous, ...result });
-    } catch (error) {
-      // 409: 그사이 문자로 인증됨 → 인증된 번호를 보여주도록 상태를 다시 가져온다
-      if (error instanceof ApiRequestError && error.status === 409) await refreshAlert();
-      throw error;
-    }
-  }
-
   // 태그 조회 (진행 중인 신고가 있으면 상태도 먼저 가져온다)
   useEffect(() => {
-    if (!isAedOnly && tagId) void getPublicConfig().then((c) => setGatewayPhone(c.gatewayPhone));
     if (isAedOnly) {
       document.title = '주변 AED 찾기 · TagMe';
       return;
@@ -105,42 +83,21 @@ export function TagApp() {
     };
   }, []);
 
-  // 인증되면 본인 확인 대기를 끝낸다
-  useEffect(() => {
-    if (alert?.isRescuerVerified) setVerificationStartedAt(undefined);
-  }, [alert?.isRescuerVerified]);
-
-  // 승인 대기·공개 중·거절 상태면 3초마다 확인 (다른 보호자가 승인할 수 있음).
-  // 본인 확인 문자를 기다리는 동안에도 확인한다
+  // 승인 대기·공개 중·거절 상태면 3초마다 확인 (다른 보호자가 승인할 수 있음)
   const status = alert?.accessStatus;
-  const isAwaitingVerification = verificationStartedAt !== undefined;
-  const shouldPoll =
-    Boolean(alertId) && (status === 'requested' || status === 'approved' || status === 'denied' || isAwaitingVerification);
+  const shouldPoll = Boolean(alertId) && (status === 'requested' || status === 'approved' || status === 'denied');
   useInterval(
     () => {
-      if (verificationStartedAt && Date.now() - verificationStartedAt > VERIFICATION_WAIT_MS) {
-        setVerificationStartedAt(undefined);
-      }
       if (!document.hidden) void refreshAlert();
     },
     shouldPoll ? POLL_INTERVAL_MS : null,
   );
 
-  const rescuerCard =
-    alertId && alert ? (
-      <RescuerCard
-        alert={alert}
-        gatewayPhone={gatewayPhone}
-        isAwaitingVerification={isAwaitingVerification}
-        onVerificationStarted={() => {
-          setVerificationStartedAt(Date.now());
-          api.simulateVerificationSms?.();
-        }}
-        onSavePhone={setRescuerPhone}
-      />
-    ) : null;
-
-  const view = isAedOnly ? 'aed' : load.kind !== 'ready' ? load.kind : route === 'info' || route === 'aed' ? route : 'main';
+  let view: 'aed' | 'info' | 'main' | 'loading' | 'error';
+  if (isAedOnly) view = 'aed';
+  else if (load.kind === 'ready') view = route === 'info' || route === 'aed' ? route : 'main';
+  else if (load.kind === 'basic') view = route === 'aed' ? 'aed' : 'main';
+  else view = load.kind;
 
   useLayoutEffect(() => {
     document.body.classList.toggle('is-sub', view === 'info' || view === 'aed');
@@ -154,6 +111,8 @@ export function TagApp() {
     content = <Loading />;
   } else if (load.kind === 'error') {
     content = <ErrorView title={load.title} description={load.description} hasCall119 />;
+  } else if (load.kind === 'basic') {
+    content = <MainView />;
   } else if (view === 'info') {
     content = (
       <InfoView
@@ -165,19 +124,19 @@ export function TagApp() {
           await refreshAlert(result.alertId);
         }}
         onExpired={() => setAlert((previous) => ({ ...previous, accessStatus: 'expired', approvedUntil: undefined, emergencyInfo: undefined }))}
-        rescuerCard={rescuerCard}
       />
     );
   } else {
     content = (
       <MainView
-        contactCount={load.tag.contactCount}
-        onContact={async (position) => {
-          const result = await createAlert('contact', position);
-          await refreshAlert(result.alertId);
-          return result;
+        tag={{
+          contactCount: load.tag.contactCount,
+          onContact: async (position, memo) => {
+            const result = await createAlert('contact', position, memo);
+            await refreshAlert(result.alertId);
+            return result;
+          },
         }}
-        rescuerCard={rescuerCard}
       />
     );
   }

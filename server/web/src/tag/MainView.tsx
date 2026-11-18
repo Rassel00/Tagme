@@ -1,39 +1,48 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Btn119, Hero, Notice, Sheet } from '../components/common';
 import { Icon } from '../components/Icon';
 import { errorMessage } from '../lib/format';
 import type { CreateAlertResult, LatLng } from '../lib/types';
 import { currentPositionForAlert } from './context';
 
+/** 보호자 문자가 너무 길어지지 않게 (서버 LIMITS.rescuerMemoMaxLength 와 같은 값) */
+const MEMO_MAX_LENGTH = 100;
+
 type ContactResult = { kind: 'success' | 'error'; title: string; description: string };
 
-/** 메인 (WEB-01) + 비상연락망 연락 (WEB-02) */
+/**
+ * 메인 (WEB-01) + 비상연락망 연락 (WEB-02).
+ * tag 가 없으면 기본 페이지: 119 신고와 주변 AED 찾기만 활성화한다 (태그 없이 열었거나 비활성 태그).
+ */
 export function MainView({
-  contactCount,
-  onContact,
-  rescuerCard,
+  tag,
 }: {
-  contactCount: number;
-  onContact: (position: LatLng | null) => Promise<CreateAlertResult>;
-  /** 신고가 생긴 뒤 보이는 신고자 연락처 카드 (WEB-05) */
-  rescuerCard?: ReactNode;
+  tag?: {
+    contactCount: number;
+    onContact: (position: LatLng | null, memo: string) => Promise<CreateAlertResult>;
+  };
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [memo, setMemo] = useState('');
   /** 보내는 중 버튼에 보일 진행 문구 */
   const [progress, setProgress] = useState<string>();
   const [result, setResult] = useState<ContactResult>();
 
+  const isBasic = !tag;
+  const contactCount = tag?.contactCount ?? 0;
   const hasContacts = contactCount > 0;
-  const isDisabled = !hasContacts || progress !== undefined;
-  const label = progress ?? (hasContacts ? '비상연락망에 연락하기' : '등록된 비상연락처가 없습니다');
+  const isContactDisabled = isBasic || !hasContacts || progress !== undefined;
+  const contactLabel = progress ?? (isBasic || hasContacts ? '비상연락망에 연락하기' : '등록된 비상연락처가 없습니다');
 
   async function sendContact(): Promise<void> {
+    if (!tag) return;
     setResult(undefined);
     try {
       setProgress('위치 확인 중…');
       const position = await currentPositionForAlert();
       setProgress('보호자에게 알리는 중…');
-      const sent = await onContact(position);
+      const sent = await tag.onContact(position, memo.trim());
+      setMemo('');
 
       let title: string;
       if (!sent.isMerged) title = `보호자 ${sent.notifiedCount}명에게 발송됨`;
@@ -56,11 +65,19 @@ export function MainView({
       <Hero
         title="응급 지원 페이지"
         description={
-          <>
-            이 사용자의 응급정보와
-            <br />
-            도움이 필요한 상황을 확인할 수 있습니다.
-          </>
+          isBasic ? (
+            <>
+              위급하면 119에 먼저 신고하세요.
+              <br />
+              주변 AED 위치를 찾을 수 있습니다.
+            </>
+          ) : (
+            <>
+              이 사용자의 응급정보와
+              <br />
+              도움이 필요한 상황을 확인할 수 있습니다.
+            </>
+          )
         }
       />
 
@@ -70,20 +87,28 @@ export function MainView({
         <button
           type="button"
           className="menu-item"
-          aria-disabled={isDisabled || undefined}
+          aria-disabled={isContactDisabled || undefined}
           onClick={() => {
-            if (!isDisabled) setIsDialogOpen(true);
+            if (!isContactDisabled) setIsDialogOpen(true);
           }}
         >
           <Icon name="phone" className="menu-icon" />
-          <span className="menu-label">{label}</span>
+          <span className="menu-label">{contactLabel}</span>
           <Icon name="chevron" className="menu-chevron" />
         </button>
-        <a className="menu-item" href="#info">
-          <Icon name="heart" className="menu-icon" />
-          <span className="menu-label">사용자 응급정보 확인</span>
-          <Icon name="chevron" className="menu-chevron" />
-        </a>
+        {isBasic ? (
+          <button type="button" className="menu-item" aria-disabled="true">
+            <Icon name="heart" className="menu-icon" />
+            <span className="menu-label">사용자 응급정보 확인</span>
+            <Icon name="chevron" className="menu-chevron" />
+          </button>
+        ) : (
+          <a className="menu-item" href="#info">
+            <Icon name="heart" className="menu-icon" />
+            <span className="menu-label">사용자 응급정보 확인</span>
+            <Icon name="chevron" className="menu-chevron" />
+          </a>
+        )}
         <a className="menu-item" href="#aed">
           <Icon name="aed" className="menu-icon" />
           <span className="menu-label">주변 AED 찾기</span>
@@ -97,24 +122,39 @@ export function MainView({
         </Notice>
       )}
 
-      {rescuerCard}
-
       <p className="footnote">
         <Icon name="warn" />
-        해당 정보는 응급상황 대응을 위한 최소한의 정보만 제공됩니다.
+        {isBasic
+          ? '응급정보 확인과 비상연락망 연락은 등록된 응급 태그를 대면 사용할 수 있습니다.'
+          : '해당 정보는 응급상황 대응을 위한 최소한의 정보만 제공됩니다.'}
       </p>
 
-      <Sheet
-        isOpen={isDialogOpen}
-        onClose={(value) => {
-          setIsDialogOpen(false);
-          if (value === 'confirm') void sendContact();
-        }}
-        icon="phone"
-        title="비상연락망에 알릴까요?"
-        description={`보호자 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 보호자 번호는 화면에 표시되지 않습니다.`}
-        confirmLabel="알리기"
-      />
+      {tag && (
+        <Sheet
+          isOpen={isDialogOpen}
+          onClose={(value) => {
+            setIsDialogOpen(false);
+            if (value === 'confirm') void sendContact();
+          }}
+          icon="phone"
+          title="비상연락망에 알릴까요?"
+          description={`보호자 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 보호자 번호는 화면에 표시되지 않습니다.`}
+          confirmLabel="알리기"
+        >
+          <label className="sheet-field">
+            <span>신고자 메모 (선택)</span>
+            <textarea
+              name="memo"
+              rows={3}
+              maxLength={MEMO_MAX_LENGTH}
+              placeholder="신고자 연락처, 현재 상황 등 (예: 010-1234-5678, 길에서 쓰러져 의식 없음)"
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+            />
+            <small>남긴 메모는 보호자 문자에 함께 전달됩니다.</small>
+          </label>
+        </Sheet>
+      )}
     </section>
   );
 }

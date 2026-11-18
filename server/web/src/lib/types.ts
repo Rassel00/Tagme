@@ -33,16 +33,6 @@ export interface AlertStatus {
   accessStatus: AccessStatus;
   approvedUntil?: string;
   emergencyInfo?: ProfileValues;
-  /** 본인 확인 문자에 넣는 신고 코드 (SOS-{code}) */
-  code?: string;
-  /** 신고자 본인 번호 (직접 입력 또는 문자 본인 확인) */
-  rescuerPhone?: string | null;
-  isRescuerVerified?: boolean;
-}
-
-export interface RescuerPhoneResult {
-  rescuerPhone: string;
-  isRescuerVerified: boolean;
 }
 
 export interface Aed {
@@ -72,11 +62,8 @@ export class ApiRequestError extends Error {
 
 export interface PublicApi {
   getTag(): Promise<PublicTag>;
-  createAlert(action: AlertAction, position: LatLng | null): Promise<CreateAlertResult>;
+  /** memo: 비상연락망 연락 확인 팝업의 신고자 메모 (보호자 문자·승인 페이지에 표시) */
+  createAlert(action: AlertAction, position: LatLng | null, memo?: string): Promise<CreateAlertResult>;
   getAlert(alertId: string): Promise<AlertStatus>;
   getAeds(position: LatLng, limit: number): Promise<Aed[]>;
-  /** 신고자 번호 직접 입력 (WEB-05). 문자로 인증된 번호가 있으면 409 */
-  setRescuerPhone(alertId: string, rescuerPhone: string): Promise<RescuerPhoneResult>;
-  /** 데모 전용: 본인 확인 문자를 보낸 것으로 치고 잠시 뒤 인증 처리 */
-  simulateVerificationSms?(): void;
 }

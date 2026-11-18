@@ -177,21 +177,24 @@ function MainView({
             )}
           </dd>
         </dl>
-        <dl className="field">
-          <dt>신고자 번호</dt>
-          <dd>
-            {alert.rescuerPhone ? (
-              <>
-                {formatPhone(alert.rescuerPhone)}
-                <span className={alert.isRescuerVerified ? 'badge badge--ok' : 'badge'}>
-                  {alert.isRescuerVerified ? '인증됨' : '미인증'}
-                </span>
-              </>
-            ) : (
-              <span className="muted">미입력</span>
-            )}
-          </dd>
-        </dl>
+        {/* 신고자 번호는 문자 본인 확인 등으로 있을 때만 (웹 입력은 신고자 메모로 대체, 11/18) */}
+        {alert.rescuerPhone && (
+          <dl className="field">
+            <dt>신고자 번호</dt>
+            <dd>
+              {formatPhone(alert.rescuerPhone)}
+              <span className={alert.isRescuerVerified ? 'badge badge--ok' : 'badge'}>
+                {alert.isRescuerVerified ? '인증됨' : '미인증'}
+              </span>
+            </dd>
+          </dl>
+        )}
+        {alert.rescuerMemo && (
+          <dl className="field field--note">
+            <dt>신고자 메모</dt>
+            <dd>{alert.rescuerMemo}</dd>
+          </dl>
+        )}
         <dl className="field">
           <dt>응급정보 열람</dt>
           <dd>

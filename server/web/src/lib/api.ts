@@ -1,4 +1,4 @@
-import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag, RescuerPhoneResult } from './types';
+import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types';
 import { ApiRequestError } from './types';
 import { createMockApi } from './mock-api';
 
@@ -32,14 +32,12 @@ function createHttpApi(tagId: string): PublicApi {
   const tagPath = `/api/public/tags/${encodeURIComponent(tagId)}`;
   return {
     getTag: () => request<PublicTag>('GET', tagPath),
-    createAlert: (action: AlertAction, position: LatLng | null) =>
-      request<CreateAlertResult>('POST', `${tagPath}/alerts`, { action, ...(position ?? {}) }),
+    createAlert: (action: AlertAction, position: LatLng | null, memo?: string) =>
+      request<CreateAlertResult>('POST', `${tagPath}/alerts`, { action, ...(position ?? {}), ...(memo ? { memo } : {}) }),
     getAlert: (alertId: string) =>
       request<AlertStatus>('GET', `/api/public/alerts/${encodeURIComponent(alertId)}`),
     getAeds: (position: LatLng, limit: number) =>
       request<Aed[]>('GET', `/api/public/aeds?lat=${position.lat}&lng=${position.lng}&limit=${limit}`),
-    setRescuerPhone: (alertId: string, rescuerPhone: string) =>
-      request<RescuerPhoneResult>('PATCH', `/api/public/alerts/${encodeURIComponent(alertId)}`, { rescuerPhone }),
   };
 }
 
@@ -53,8 +51,6 @@ export function createApi(tagId: string): PublicApi {
 export interface PublicConfig {
   /** 카카오맵 JavaScript 키 */
   kakaoJsKey: string | null;
-  /** 게이트웨이 폰 번호. 신고자 본인 확인 문자의 수신 번호 */
-  gatewayPhone: string | null;
 }
 
 let configPromise: Promise<PublicConfig> | undefined;
@@ -63,8 +59,8 @@ let configPromise: Promise<PublicConfig> | undefined;
 export function getPublicConfig(): Promise<PublicConfig> {
   configPromise ??= fetch('/api/public/config', { cache: 'no-store' })
     .then((r) => (r.ok ? (r.json() as Promise<Partial<PublicConfig>>) : {}))
-    .then((c: Partial<PublicConfig>) => ({ kakaoJsKey: c.kakaoJsKey ?? null, gatewayPhone: c.gatewayPhone ?? null }))
-    .catch(() => ({ kakaoJsKey: null, gatewayPhone: null }));
+    .then((c: Partial<PublicConfig>) => ({ kakaoJsKey: c.kakaoJsKey ?? null }))
+    .catch(() => ({ kakaoJsKey: null }));
   return configPromise;
 }
 
