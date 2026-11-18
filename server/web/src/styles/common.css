@@ -329,6 +329,8 @@ body.is-sub { background: var(--bg); }
 .btn svg { width: 20px; height: 20px; flex: none; }
 .btn-call { margin-top: 4px; min-height: 60px; background: var(--green); color: #fff; font-size: 17px; }
 .btn-call:active { background: #17804f; }
+.btn-call-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; }
+.btn-call-text small { font-size: 14px; font-weight: 600; opacity: 0.9; }
 .btn-119-sub { margin: 10px 0 16px; background: var(--surface); border: 1px solid var(--line); color: var(--red-strong); }
 .btn-outline { background: var(--surface); border: 1px solid var(--line); color: var(--text-2); }
 

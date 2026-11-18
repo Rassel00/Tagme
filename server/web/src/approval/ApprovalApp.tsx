@@ -145,7 +145,7 @@ export function ApprovalApp() {
         icon="check"
         isGreen
         title="응급정보를 공개할까요?"
-        description={`${view?.userName ?? ''}님의 비공개 응급정보를 이 신고를 한 사람에게 ${durationLabel(durationMinutes)} 동안 보여줍니다.`}
+        description={`${view?.userName ?? ''}님의 비공개 응급정보와 회원님 전화번호를 이 신고를 한 사람에게 ${durationLabel(durationMinutes)} 동안 보여줍니다.`}
         confirmLabel="공개 승인"
       />
       <Sheet
@@ -328,7 +328,7 @@ function MainView({
 
       <p className="footnote">
         <Icon name="lock" />
-        승인하면 이 신고를 한 사람의 화면에서만, 정한 시간 동안 응급정보가 보입니다. 링크는 신고 후 24시간 동안 유효합니다.
+        승인하면 이 신고를 한 사람의 화면에서만, 정한 시간 동안 응급정보와 회원님 전화번호(바로 전화할 수 있게)가 보입니다. 링크는 신고 후 24시간 동안 유효합니다.
       </p>
 
       {/* 알림 그만 받기 (11/18): 주인이 관리할 수 없게 된 태그나 동의 없이 등록된 번호도 보호자가 직접 끊을 수 있게 */}

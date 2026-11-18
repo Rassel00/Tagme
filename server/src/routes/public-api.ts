@@ -245,6 +245,15 @@ export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
       response.emergencyInfo = toLockedValues(person);
       // 비공개 보험 목록도 승인되면 함께
       if (person && !person.publicFields.includes('insurances')) response.insurances = person.insurances;
+      // 승인한 보호자의 연락처 (11/18). 보호자가 이 신고자를 믿고 승인했을 때만, 이 신고의 세션 쿠키를 가진 신고자에게만
+      // 보여 준다. 승인 페이지에 "승인하면 신고자에게 회원님 번호가 보여요"를 안내한다
+      if (alert.decidedByContactId) {
+        const { rows } = await getPool().query<{ relation: string; phone: string }>(
+          'SELECT relation, phone FROM contacts WHERE id = $1',
+          [alert.decidedByContactId],
+        );
+        if (rows[0]) response.approverContact = { relation: rows[0].relation, phone: rows[0].phone };
+      }
     }
     res.json(response);
   });

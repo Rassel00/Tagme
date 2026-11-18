@@ -122,6 +122,7 @@ export function createMockApi(state: string | null, typeParam: string | null = n
             emergencyInfo: hidden,
             ...(isInsuranceLocked ? { insurances } : {}),
             guardianRespondingAt,
+            approverContact: { relation: '엄마', phone: '01012345678' },
           }
         : { accessStatus: alert.accessStatus, guardianRespondingAt };
     },
