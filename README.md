@@ -9,7 +9,7 @@ NFC 키링·팔찌를 폰에 대면 응급 지원 웹이 열리고, 신고자가
 | 경로 | 내용 | 기술 |
 | --- | --- | --- |
 | `server/` | 백엔드 API | Node.js + TypeScript, Express, PostgreSQL(Neon) |
-| `server/web/` | 응급 지원 웹 `/t/{tagId}`, 보호자 승인 웹 `/a/{approveToken}` | 정적 HTML/CSS + TypeScript, 백엔드가 서빙 |
+| `server/web/` | 응급 지원 웹 `/t/{tagId}`, 보호자 승인 웹 `/a/{approveToken}` | React + Vite + TypeScript, 빌드 결과(`web/dist`)를 백엔드가 서빙 |
 | `app/` | 사용자 앱 | Flutter (Android 먼저) |
 | `gateway/` | 문자 게이트웨이 앱 | Android, Kotlin |
 | `docs/` | 개발 문서, WBS, 진행 기록 | |
@@ -34,10 +34,10 @@ npm run dev            # http://localhost:3000
 
 | 명령 | 설명 |
 | --- | --- |
-| `npm run dev` | 서버 + 웹 클라이언트 watch |
-| `npm run build` | 서버(`dist/`)와 웹 클라이언트(`web/public/js/`) 빌드 |
+| `npm run dev` | 서버(`tsx watch`) + 웹 클라이언트(`vite build --watch`) |
+| `npm run build` | 서버(`dist/`)와 웹 클라이언트(`web/dist/`) 빌드 |
 | `npm start` | 빌드 결과 실행 (Render) |
 | `npm run migrate` | `migrations/*.sql` 순서대로 적용 |
 | `npm run seed` | 가상 사용자·응급정보·태그·연락처 입력 |
-| `npm test` | 단위 테스트 |
+| `npm test` | 웹 빌드 후 단위·통합 테스트 |
 | `npm run typecheck` | 타입 검사 |
