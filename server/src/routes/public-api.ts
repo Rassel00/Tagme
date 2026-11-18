@@ -105,9 +105,10 @@ export function createPublicApiRouter(): Router {
     key: (req) => req.ip ?? 'unknown',
   });
 
-  // 웹 화면용 공개 설정. 카카오맵 JS 키는 등록 도메인에서만 동작하는 공개 키라 내려줘도 된다
+  // 웹 화면용 공개 설정. 카카오맵 JS 키는 등록 도메인에서만 동작하는 공개 키라 내려줘도 된다.
+  // 게이트웨이 번호는 신고자 본인 확인 문자(sms: 링크)의 수신 번호라 화면에 노출되는 값이다 (WEB-05)
   router.get('/config', (_req, res) => {
-    res.json({ kakaoJsKey: config.kakaoJsKey ?? null });
+    res.json({ kakaoJsKey: config.kakaoJsKey ?? null, gatewayPhone: config.gatewayPhone ?? null });
   });
 
   // 주변 AED 가까운 순 (WEB-06). 앱의 "주변 AED 찾기"도 /aed 웹 페이지로 이 API 를 쓴다
@@ -166,6 +167,9 @@ export function createPublicApiRouter(): Router {
       hasContacted: alert.hasContacted,
       hasRequestedAccess: alert.hasRequestedAccess,
       code: alert.code,
+      // 신고자 본인 번호 (직접 입력 또는 문자 본인 확인). 이 신고의 세션 쿠키를 가진 신고자에게만 보인다
+      rescuerPhone: alert.rescuerPhone,
+      isRescuerVerified: alert.isRescuerVerified,
     };
     if (status === 'approved') {
       const person = await findPersonForTag(getPool(), alert.tagId);

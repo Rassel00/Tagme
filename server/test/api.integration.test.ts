@@ -388,7 +388,10 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.equal(view.json.alert.rescuerPhone, '01055556666');
     assert.equal(view.json.alert.isRescuerVerified, false);
 
-    const { code } = (await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).json;
+    const before = (await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).json;
+    assert.equal(before.rescuerPhone, '01055556666');
+    assert.equal(before.isRescuerVerified, false);
+    const { code } = before;
     const wrong = await call('POST', '/api/gateway/inbound-sms', { ...gw, body: { from: '+821077778888', body: 'SOS-ZZZZZZ' } });
     assert.deepEqual(wrong.json, { matched: false });
     const sms = await call('POST', '/api/gateway/inbound-sms', {
@@ -400,6 +403,9 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     view = await call('GET', `/api/approvals/${approveTokens[0]}`);
     assert.equal(view.json.alert.rescuerPhone, '01077778888');
     assert.equal(view.json.alert.isRescuerVerified, true);
+    const after = (await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).json;
+    assert.equal(after.rescuerPhone, '01077778888');
+    assert.equal(after.isRescuerVerified, true);
     const overwrite = await call('PATCH', `/api/public/alerts/${alertId}`, {
       cookie: sessionCookie,
       body: { rescuerPhone: '01055556666' },
