@@ -18,7 +18,8 @@ NFC 키링·팔찌를 폰에 대면 응급 지원 웹이 열리고, 신고자가
 
 ```bash
 cd server
-cp .env.example .env   # DATABASE_URL 등 채우기
+# server/.env 는 dotenvx 로 암호화되어 커밋돼 있다. 비밀번호 관리자의 개인 키를 server/.env.keys 에 넣는다
+#   DOTENV_PRIVATE_KEY=...
 npm install
 npm run migrate        # 스키마 적용
 npm run seed           # 시연용 가상 데이터 (앱 없이 웹 개발용)
@@ -26,6 +27,7 @@ npm run dev            # http://localhost:3000
 ```
 
 - 헬스체크: `GET /healthz`
+- 키 추가·변경: `npx dotenvx set KEY value` (암호화된 `.env` 를 직접 편집하지 않는다). 키 목록·설명은 `.env.example`, 자세한 내용은 [docs/시크릿-관리-계획.md](docs/시크릿-관리-계획.md)
 - 응급 지원 웹: `/t/{tagId}` (시드 출력의 URL, DB 없이 화면만 볼 때는 `/t/demo`)
 
 ## 스크립트 (server/)

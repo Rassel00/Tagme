@@ -1,6 +1,6 @@
 node_modules/
 dist/
-.env
+.env.keys
 *.log
 
 # 웹 클라이언트 빌드 결과 (server/web/src → server/web/public/js)
