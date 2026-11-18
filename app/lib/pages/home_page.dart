@@ -575,7 +575,7 @@ class _SettingsTabState extends State<_SettingsTab> {
     try {
       await AuthService.instance.linkGoogle();
       await ApiClient.instance.registerMe();
-      if (mounted) showMessage(context, '구글 계정을 연결했어요. 이제 다른 폰에서도 이 정보로 로그인할 수 있어요.');
+      if (mounted) showMessage(context, '구글 계정을 연결했어요. 이제 다른 휴대폰에서도 이 정보로 로그인할 수 있어요.');
     } catch (e) {
       final message = AuthService.describeError(e);
       if (mounted && message != null) showMessage(context, message);
@@ -607,7 +607,7 @@ class _SettingsTabState extends State<_SettingsTab> {
                       isGuest ? '게스트' : (user?.email ?? '구글 계정'),
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                    subtitle: Text(isGuest ? '구글 계정을 연결해야 다른 폰에서도 이어서 쓸 수 있어요' : '구글 계정으로 로그인됨'),
+                    subtitle: Text(isGuest ? '구글 계정을 연결해야 다른 휴대폰에서도 이어서 쓸 수 있어요' : '구글 계정으로 로그인됨'),
                   ),
                   if (isGuest) ...[
                     const Divider(height: 1),
