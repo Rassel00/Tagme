@@ -150,8 +150,8 @@ describe('보호자·연락처 문자 (11/18)', () => {
   });
 
   it('수락 안내 문자는 보호자 여부에 따라 안내가 다르다', () => {
-    assert.match(renderInviteSms({ userName: '김지우', inviteUrl: 'u', isGuardian: true }), /보호자로 회원님 번호가.*\n.*승인할 수 있습니다/);
-    assert.match(renderInviteSms({ userName: '김지우', inviteUrl: 'u', isGuardian: false }), /비상연락처로 회원님 번호가.*\n수락하면 응급 상황에 위치 알림/);
+    assert.match(renderInviteSms({ userName: '김지우', inviteUrl: 'u', isGuardian: true }), /보호자로 회원님 번호가.*\n\n.*승인할 수 있습니다\.\n\n수락·거절:\nu$/);
+    assert.match(renderInviteSms({ userName: '김지우', inviteUrl: 'u', isGuardian: false }), /비상연락처로 회원님 번호가.*\n\n수락하면 응급 상황에 위치 알림/);
   });
 });
 
@@ -168,14 +168,18 @@ describe('문자 템플릿 (7.3)', () => {
     approveUrl: 'https://example.com/a/TOKEN',
   };
 
-  it('이름·메시지·위치·승인 링크를 담고, 신고자 번호가 없으면 그 줄은 뺀다', () => {
+  it('이름·메시지·위치·승인 링크를 빈 줄로 나눠 담고, 신고자 번호가 없으면 그 구역은 뺀다', () => {
     const body = renderGuardianSms(input);
     assert.equal(
       body,
       [
         '[응급안심] 김지우님 응급 태그가 스캔되었습니다.',
+        '',
         '지우 응급 태그가 스캔됐어요',
-        '위치: https://maps.google.com/?q=37.293900,126.974400',
+        '',
+        '위치:',
+        'https://maps.google.com/?q=37.293900,126.974400',
+        '',
         '상황 확인·응급정보 열람 승인:',
         'https://example.com/a/TOKEN',
       ].join('\n'),
@@ -184,7 +188,7 @@ describe('문자 템플릿 (7.3)', () => {
 
   it('신고자 메모는 위치 앞에 넣는다', () => {
     const body = renderGuardianSms({ ...input, rescuerMemo: '  010-1111-2222 지하철역에서 쓰러짐 ' });
-    assert.match(body, /신고자 메모: 010-1111-2222 지하철역에서 쓰러짐\n위치: /);
+    assert.match(body, /신고자 메모: 010-1111-2222 지하철역에서 쓰러짐\n\n위치:\n/);
   });
 
   it('이름 없음·위치 없음·열람 요청·인증된 신고자', () => {
@@ -199,7 +203,7 @@ describe('문자 템플릿 (7.3)', () => {
     });
     assert.match(body, /^\[응급안심\] 등록 사용자님/);
     assert.match(body, /신고자가 응급정보 열람을 요청했습니다\./);
-    assert.match(body, /위치: 위치 정보 없음/);
+    assert.match(body, /위치:\n위치 정보 없음/);
     assert.match(body, /신고자: 010-1234-5678 \(인증됨\)/);
   });
 

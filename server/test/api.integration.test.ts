@@ -389,8 +389,8 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     const list = jobs.json as unknown as { jobId: string; phone: string; body: string }[];
     assert.deepEqual(list.map((j) => j.phone).sort(), [...PHONES].sort());
     const mom = list.find((j) => j.phone === PHONES[0])!;
-    assert.match(mom.body, /^\[응급안심\] 김지우님 응급 태그가 스캔되었습니다\.\n긴급상황입니다\. 위치 확인 부탁드립니다\n/);
-    assert.match(mom.body, /위치: https:\/\/maps\.google\.com\/\?q=37\.293900,126\.974400/);
+    assert.match(mom.body, /^\[응급안심\] 김지우님 응급 태그가 스캔되었습니다\.\n\n긴급상황입니다\. 위치 확인 부탁드립니다\n\n/);
+    assert.match(mom.body, /위치:\nhttps:\/\/maps\.google\.com\/\?q=37\.293900,126\.974400/);
     const other = list.find((j) => j.phone === PHONES[1])!;
     assert.match(other.body, /긴급상황입니다\. 위치 확인 부탁드립니다/);
 
