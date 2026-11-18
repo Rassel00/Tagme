@@ -322,6 +322,13 @@ class _TagEditorPageState extends State<TagEditorPage> {
               ),
             ],
           ),
+          // 칸 안에 뜨는 라벨이 위 설명·힌트와 겹쳐서 칸 위 제목으로 뺐다 (11/18)
+          const SizedBox(height: 10),
+          const Text(
+            '이 사람에게 보낼 메모 (선택)',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2),
+          ),
+          const SizedBox(height: 6),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: TextField(
@@ -329,7 +336,6 @@ class _TagEditorPageState extends State<TagEditorPage> {
               maxLength: 100,
               onChanged: (_) => _markDirty(),
               decoration: const InputDecoration(
-                labelText: '이 사람에게 보낼 메모 (선택)',
                 hintText: '예: 회사에 있으면 엄마에게 연락해 주세요',
                 counterText: '',
               ),
@@ -337,6 +343,23 @@ class _TagEditorPageState extends State<TagEditorPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 화면 배경 위에 바로 놓이는 입력 칸: 배경과 같은 회색이라 안 보여서 흰 바탕 + 테두리 (11/18)
+  static InputDecoration _boxedDecoration({required String labelText, String? hintText}) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: Color(0xFFD5D6DC)),
+    );
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      counterText: '',
+      fillColor: AppColors.surface,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: border.copyWith(borderSide: const BorderSide(color: AppColors.red, width: 1.5)),
     );
   }
 
@@ -375,7 +398,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
           controller: _label,
           maxLength: 30,
           onChanged: (_) => _markDirty(),
-          decoration: const InputDecoration(labelText: '태그 이름 (선택)', hintText: '예: 키링, 책가방, 팔찌', counterText: ''),
+          decoration: _boxedDecoration(labelText: '태그 이름 (선택)', hintText: '예: 키링, 책가방, 팔찌'),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -384,7 +407,7 @@ class _TagEditorPageState extends State<TagEditorPage> {
           minLines: 2,
           maxLines: 3,
           onChanged: (_) => _markDirty(),
-          decoration: const InputDecoration(labelText: '문자에 넣을 메시지', counterText: ''),
+          decoration: _boxedDecoration(labelText: '문자에 넣을 메시지'),
         ),
         const SizedBox(height: 6),
         const Text(
