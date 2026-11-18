@@ -2,9 +2,9 @@
  * 보호자 승인 API 클라이언트 (개발 문서 6.3). /a/demo 는 서버 없이 가짜 데이터로 동작한다.
  * ?state=expired | invalid | nolocation | approved | other 로 다른 상태도 확인할 수 있다.
  */
-import { request } from './api.js';
-import type { AccessStatus } from './types.js';
-import { ApiRequestError } from './types.js';
+import { request } from './api';
+import type { AccessStatus } from './types';
+import { ApiRequestError } from './types';
 
 export interface ApprovalView {
   userName: string;

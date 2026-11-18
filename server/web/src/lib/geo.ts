@@ -1,4 +1,4 @@
-import type { LatLng } from './types.js';
+import type { LatLng } from './types';
 
 export type PositionResult =
   | { ok: true; position: LatLng }

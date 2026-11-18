@@ -50,6 +50,8 @@ export function createApp(options: AppOptions = {}): express.Express {
   app.get('/a/:approveToken', sendPage('a.html', 'no-referrer'));
   // 태그 없이 주변 AED 만 보는 페이지 (보호자 앱의 "주변 AED 찾기")
   app.get('/aed', sendPage('t.html'));
+  // Vite 가 내용 해시를 붙인 /assets/* 는 내용이 바뀌면 이름도 바뀌므로 오래 캐시한다
+  app.use('/assets', express.static(path.join(config.webRoot, 'assets'), { index: false, immutable: true, maxAge: '1y' }));
   app.use(express.static(config.webRoot, { index: false, maxAge: config.isProduction ? '1h' : 0 }));
 
   app.use(errorHandler);

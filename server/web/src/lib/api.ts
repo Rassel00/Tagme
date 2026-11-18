@@ -1,6 +1,6 @@
-import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types.js';
-import { ApiRequestError } from './types.js';
-import { createMockApi } from './mock-api.js';
+import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types';
+import { ApiRequestError } from './types';
+import { createMockApi } from './mock-api';
 
 /** tagId 가 이 값이면 서버 없이 가짜 데이터로 화면을 보여준다 (/t/demo). */
 export const DEMO_TAG_ID = 'demo';
@@ -46,4 +46,15 @@ export function createApi(tagId: string): PublicApi {
     return createMockApi(new URLSearchParams(location.search).get('state'));
   }
   return createHttpApi(tagId);
+}
+
+let kakaoKeyPromise: Promise<string | null> | undefined;
+
+/** 서버 설정의 카카오맵 JavaScript 키 (없거나 못 가져오면 null). 한 번만 요청한다 */
+export function getKakaoJsKey(): Promise<string | null> {
+  kakaoKeyPromise ??= fetch('/api/public/config', { cache: 'no-store' })
+    .then((r) => (r.ok ? (r.json() as Promise<{ kakaoJsKey?: string | null }>) : {}))
+    .then((c: { kakaoJsKey?: string | null }) => c.kakaoJsKey ?? null)
+    .catch(() => null);
+  return kakaoKeyPromise;
 }
