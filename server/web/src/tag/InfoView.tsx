@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import { useInterval, useNow } from '../hooks';
 import { errorMessage, formatBirthDate, remainingText } from '../lib/format';
-import type { AlertStatus, LatLng, ProfileField, ProfileValues, PublicTag } from '../lib/types';
-import { currentPositionForAlert } from './context';
+import type { AlertStatus, ProfileField, ProfileValues, PublicTag } from '../lib/types';
 import { Topbar } from './Topbar';
 
 const FIELD_GROUPS: { title: string; icon: IconName; fields: [ProfileField, string][] }[] = [
@@ -24,18 +22,16 @@ const FIELD_GROUPS: { title: string; icon: IconName; fields: [ProfileField, stri
 /** 값이 하나도 없는 그룹(공개도 비공개도 아닌)은 숨긴다. 기본 세 그룹은 항상 보인다 */
 const OPTIONAL_GROUPS = new Set(['장애·의사소통']);
 
-/** 사용자 응급정보 (WEB-03) + 보호자 열람 요청 (WEB-04) */
+/** 사용자 응급정보 (WEB-03). 비공개 항목은 비상연락망에 연락하면 보호자가 문자 링크에서 승인할 수 있다 (11/18 열람 요청 버튼 제거) */
 export function InfoView({
   tag,
   alert,
   onBack,
-  onRequestAccess,
   onExpired,
 }: {
   tag: PublicTag;
   alert?: AlertStatus;
   onBack: () => void;
-  onRequestAccess: (position: LatLng | null) => Promise<void>;
   onExpired: () => void;
 }) {
   const unlocked: ProfileValues = alert?.accessStatus === 'approved' ? alert.emergencyInfo ?? {} : {};
@@ -86,7 +82,7 @@ export function InfoView({
         ))}
       </div>
       {tag.lockedFields.length > 0 && (
-        <AccessPanel lockedCount={tag.lockedFields.length} hasGuardian={(tag.guardianCount ?? 0) > 0} alert={alert} onRequestAccess={onRequestAccess} onExpired={onExpired} />
+        <AccessPanel lockedCount={tag.lockedFields.length} hasGuardian={(tag.guardianCount ?? 0) > 0} alert={alert} onExpired={onExpired} />
       )}
     </section>
   );
@@ -96,17 +92,14 @@ function AccessPanel({
   lockedCount,
   hasGuardian,
   alert,
-  onRequestAccess,
   onExpired,
 }: {
   lockedCount: number;
   /** 열람 요청을 승인할 보호자가 있는지 (11/18) */
   hasGuardian: boolean;
   alert?: AlertStatus;
-  onRequestAccess: (position: LatLng | null) => Promise<void>;
   onExpired: () => void;
 }) {
-  const [isRequesting, setIsRequesting] = useState(false);
   const status = alert?.accessStatus ?? 'none';
   const now = useNow(status === 'approved');
 
@@ -118,18 +111,6 @@ function AccessPanel({
     status === 'approved' ? 1000 : null,
   );
 
-  async function requestAccess(): Promise<void> {
-    if (isRequesting) return;
-    setIsRequesting(true);
-    try {
-      await onRequestAccess(await currentPositionForAlert());
-    } catch (error) {
-      window.alert(`열람 요청에 실패했습니다.\n${errorMessage(error)}`);
-    } finally {
-      setIsRequesting(false);
-    }
-  }
-
   let body;
   switch (status) {
     case 'none':
@@ -139,19 +120,12 @@ function AccessPanel({
             <Icon name="lock" />
             잠긴 항목 {lockedCount}개
           </p>
+          {/* 11/18: 열람 요청 버튼 대신 안내. 비상연락망 문자를 받은 보호자가 링크에서 승인하면 이 화면에 자동으로 보인다 */}
           <p>
             {hasGuardian
-              ? '보호자가 승인하면 잠긴 응급정보를 볼 수 있어요.'
+              ? '비공개 정보를 열람하려면 비상연락망에 연락하여 승인 받으세요.'
               : '열람을 승인할 보호자가 등록되어 있지 않아 잠긴 정보를 볼 수 없어요. 위급하면 119에 신고하세요.'}
           </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-block"
-            disabled={isRequesting || !hasGuardian}
-            onClick={() => void requestAccess()}
-          >
-            {isRequesting ? '요청 중…' : '보호자에게 열람 요청'}
-          </button>
         </>
       );
       break;

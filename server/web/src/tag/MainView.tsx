@@ -30,6 +30,8 @@ export function MainView({
     values: ProfileValues;
     /** 보험 정보가 있으면(공개·비공개 무관) "보험 정보" 버튼 */
     hasInsurance: boolean;
+    /** 비상연락에 보호자 열람 승인 요청을 함께 보내는지 (잠긴 항목·보호자가 있을 때, 11/18) */
+    canRequestAccess: boolean;
   };
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -178,7 +180,10 @@ export function MainView({
           }}
           icon="phone"
           title="비상연락망에 알릴까요?"
-          description={`비상연락처 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 연락처 번호는 화면에 표시되지 않습니다.`}
+          description={
+            `비상연락처 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 연락처 번호는 화면에 표시되지 않습니다.` +
+            (tag.canRequestAccess ? ' 보호자에게 응급정보 열람 승인도 함께 요청하며, 승인되면 비공개 정보를 볼 수 있습니다.' : '')
+          }
           confirmLabel="알리기"
           // 신고자 메모 필수 (11/18): 보호자가 신고자에게 먼저 연락하려면 신고자 연락처·상황이 꼭 필요하다
           isConfirmDisabled={!memo.trim()}

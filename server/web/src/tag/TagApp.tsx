@@ -135,14 +135,12 @@ export function TagApp() {
         tag={load.tag}
         alert={alert}
         onBack={goBack}
-        onRequestAccess={async (position) => {
-          const result = await createAlert('requestAccess', position);
-          await refreshAlert(result.alertId);
-        }}
         onExpired={() => setAlert((previous) => ({ ...previous, accessStatus: 'expired', approvedUntil: undefined, emergencyInfo: undefined }))}
       />
     );
   } else {
+    // 잠긴 항목이 있고 승인할 보호자가 있으면 비상연락에 열람 승인 요청을 함께 보낸다
+    const canRequestAccess = load.tag.lockedFields.length > 0 && (load.tag.guardianCount ?? 0) > 0;
     content = (
       <MainView
         guardianRespondingAt={alert?.guardianRespondingAt ?? null}
@@ -151,10 +149,19 @@ export function TagApp() {
           personType: load.tag.personType ?? 'general',
           values: { ...load.tag.publicInfo, ...unlocked },
           hasInsurance: (load.tag.insuranceCount ?? 0) > 0,
+          canRequestAccess,
           onContact: async (position, memo) => {
-            const result = await createAlert('contact', position, memo);
-            await refreshAlert(result.alertId);
-            return result;
+            // 11/18: 추가 정보 화면의 열람 요청 버튼을 없애고, 비상연락에 열람 승인 요청을 함께 담는다.
+            // 열람 요청을 먼저 보내면 보호자는 승인 링크가 든 문자 1통, 이어지는 연락하기는 보호자 아닌 연락처에게만 위치 알림 (서버 병합 규칙)
+            if (!canRequestAccess) {
+              const result = await createAlert('contact', position, memo);
+              await refreshAlert(result.alertId);
+              return result;
+            }
+            const request = await createAlert('requestAccess', position, memo);
+            const contact = await createAlert('contact', position, memo);
+            await refreshAlert(contact.alertId);
+            return { ...contact, isMerged: request.isMerged, notifiedCount: request.notifiedCount + contact.notifiedCount };
           },
         }}
       />
