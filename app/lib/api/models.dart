@@ -152,7 +152,6 @@ const consentItems = [
   ),
   ConsentItem('thirdParty', '응급 시 제3자 제공', '공개 항목은 태그를 댄 사람에게, 비공개 항목은 보호자가 승인한 경우 그 신고자에게 제공', isRequired: true),
   ConsentItem('contactNotice', '비상연락처 등록', '등록하는 연락처의 주인에게 이 사실을 알렸음을 확인', isRequired: true),
-  ConsentItem('alertPush', '신고 알림 수신', '태그가 스캔되거나 신고가 들어오면 알림 (추후 제공)', isRequired: false),
 ];
 
 class ConsentStatus {

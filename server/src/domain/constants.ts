@@ -18,7 +18,12 @@ export const REQUIRED_CONSENT_TYPES = [
   'thirdParty',
   'contactNotice',
 ] as const;
-export const OPTIONAL_CONSENT_TYPES = ['alertPush'] as const;
+/**
+ * 선택 동의 항목. 11/18 '신고 알림 수신(alertPush)' 을 뺐다: 아직 없는 기능(APP-11)이고,
+ * 스캔·신고 알림은 서비스 알림이라 별도 수신 동의 대상이 아니다 (광고성만 해당). 알림을 만들 때는
+ * OS 알림 권한 + 앱 설정 스위치로 처리한다. DB CHECK 제약과 기존 동의 기록에는 남아 있어도 무방
+ */
+export const OPTIONAL_CONSENT_TYPES = [] as const;
 export const CONSENT_TYPES = [...REQUIRED_CONSENT_TYPES, ...OPTIONAL_CONSENT_TYPES] as const;
 export type ConsentType = (typeof CONSENT_TYPES)[number];
 

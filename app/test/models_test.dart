@@ -92,7 +92,7 @@ void main() {
     });
   });
 
-  test('필수 동의 5개, 선택 1개 (서버 CONSENT_TYPES 와 같음)', () {
+  test('필수 동의 5개, 선택 없음 (서버 CONSENT_TYPES 와 같음)', () {
     expect(consentItems.where((i) => i.isRequired).map((i) => i.type), [
       'terms',
       'personalInfo',
@@ -100,6 +100,6 @@ void main() {
       'thirdParty',
       'contactNotice',
     ]);
-    expect(consentItems.where((i) => !i.isRequired).map((i) => i.type), ['alertPush']);
+    expect(consentItems.where((i) => !i.isRequired), isEmpty);
   });
 }
