@@ -43,7 +43,8 @@ function createHttpApi(tagId: string): PublicApi {
 
 export function createApi(tagId: string): PublicApi {
   if (tagId === DEMO_TAG_ID) {
-    return createMockApi(new URLSearchParams(location.search).get('state'));
+    const params = new URLSearchParams(location.search);
+    return createMockApi(params.get('state'), params.get('type'));
   }
   return createHttpApi(tagId);
 }

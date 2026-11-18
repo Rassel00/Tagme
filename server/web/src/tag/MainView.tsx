@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Btn119, Hero, Notice, Sheet } from '../components/common';
 import { Icon } from '../components/Icon';
 import { errorMessage } from '../lib/format';
-import type { CreateAlertResult, LatLng } from '../lib/types';
+import type { CreateAlertResult, LatLng, PersonType, ProfileValues } from '../lib/types';
 import { currentPositionForAlert } from './context';
+import { PERSON_TYPE_SCREENS, topRows } from './person-types';
 
 /** 보호자 문자가 너무 길어지지 않게 (서버 LIMITS.rescuerMemoMaxLength 와 같은 값) */
 const MEMO_MAX_LENGTH = 100;
@@ -16,10 +17,19 @@ type ContactResult = { kind: 'success' | 'error'; title: string; description: st
  */
 export function MainView({
   tag,
+  guardianRespondingAt = null,
 }: {
+  /** 보호자가 대응 중이라고 알린 시각 (11/18) */
+  guardianRespondingAt?: string | null;
   tag?: {
     contactCount: number;
     onContact: (position: LatLng | null, memo: string) => Promise<CreateAlertResult>;
+    /** 대상자 유형 (11/18): 제목·설명과 상단 정보 카드 항목이 달라진다 */
+    personType: PersonType;
+    /** 지금 볼 수 있는 값 (공개 + 승인으로 열린 값) */
+    values: ProfileValues;
+    /** 보험 정보가 있으면(공개·비공개 무관) "보험 정보" 버튼 */
+    hasInsurance: boolean;
   };
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -45,13 +55,13 @@ export function MainView({
       setMemo('');
 
       let title: string;
-      if (!sent.isMerged) title = `보호자 ${sent.notifiedCount}명에게 발송됨`;
-      else if (sent.notifiedCount > 0) title = `보호자 ${sent.notifiedCount}명에게 다시 알렸습니다`;
-      else title = '이미 보호자에게 알림이 전송되었습니다';
+      if (!sent.isMerged) title = `비상연락처 ${sent.notifiedCount}명에게 발송됨`;
+      else if (sent.notifiedCount > 0) title = `비상연락처 ${sent.notifiedCount}명에게 다시 알렸습니다`;
+      else title = '이미 비상연락처에 알림이 전송되었습니다';
       setResult({
         kind: 'success',
         title,
-        description: '보호자가 위치를 확인하고 연락할 수 있습니다. 위급하면 119에 먼저 신고하세요.',
+        description: '비상연락처가 위치를 확인하고 연락할 수 있습니다. 위급하면 119에 먼저 신고하세요.',
       });
     } catch (error) {
       setResult({ kind: 'error', title: '알림을 보내지 못했습니다', description: errorMessage(error) });
@@ -60,10 +70,14 @@ export function MainView({
     }
   }
 
+  const screen = PERSON_TYPE_SCREENS[tag?.personType ?? 'general'];
+  const rows = tag ? topRows(tag.personType, tag.values) : [];
+  const careTips = tag?.personType === 'disabled' ? tag.values.careTips : undefined;
+
   return (
     <section className="view">
       <Hero
-        title="응급 지원 페이지"
+        title={screen.title}
         description={
           isBasic ? (
             <>
@@ -72,14 +86,28 @@ export function MainView({
               주변 AED 위치를 찾을 수 있습니다.
             </>
           ) : (
-            <>
-              이 사용자의 응급정보와
-              <br />
-              도움이 필요한 상황을 확인할 수 있습니다.
-            </>
+            screen.description.split('\n').flatMap((line, i) => (i === 0 ? [line] : [<br key={i} />, line]))
           )
         }
       />
+
+      {/* 유형별로 보호자가 공개한 정보를 버튼보다 먼저 (사업계획서 19장) */}
+      {careTips && (
+        <div className="care-tips">
+          <strong>이렇게 대해 주세요</strong>
+          <p>{careTips}</p>
+        </div>
+      )}
+      {rows.length > 0 && (
+        <dl className="card top-info">
+          {rows.map(([label, value]) => (
+            <div className="top-info-row" key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
 
       <Btn119 />
 
@@ -109,6 +137,13 @@ export function MainView({
             <Icon name="chevron" className="menu-chevron" />
           </a>
         )}
+        {tag?.hasInsurance && (
+          <a className="menu-item" href="#insurance">
+            <Icon name="shield" className="menu-icon" />
+            <span className="menu-label">보험 정보</span>
+            <Icon name="chevron" className="menu-chevron" />
+          </a>
+        )}
         <a className="menu-item" href="#aed">
           <Icon name="aed" className="menu-icon" />
           <span className="menu-label">주변 AED 찾기</span>
@@ -119,6 +154,11 @@ export function MainView({
       {result && (
         <Notice kind={result.kind === 'error' ? 'error' : undefined} icon={result.kind === 'success' ? 'check' : 'warn'} title={result.title}>
           {result.description}
+        </Notice>
+      )}
+      {guardianRespondingAt && (
+        <Notice icon="check" title="보호자가 확인하고 대응 중이에요">
+          곧 보호자에게서 연락이 올 수 있어요. 위급하면 119에 먼저 신고하세요.
         </Notice>
       )}
 
@@ -138,7 +178,7 @@ export function MainView({
           }}
           icon="phone"
           title="비상연락망에 알릴까요?"
-          description={`보호자 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 보호자 번호는 화면에 표시되지 않습니다.`}
+          description={`비상연락처 ${contactCount}명에게 현재 위치와 함께 문자로 알립니다. 연락처 번호는 화면에 표시되지 않습니다.`}
           confirmLabel="알리기"
         >
           <label className="sheet-field">

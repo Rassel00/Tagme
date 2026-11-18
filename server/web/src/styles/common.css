@@ -438,3 +438,25 @@ body.is-sub { background: var(--bg); }
 .invite-points { margin: 4px 0 0; padding-left: 20px; color: var(--text-2); font-size: 14px; }
 .invite-points li + li { margin-top: 6px; }
 .invite-change { margin-top: 10px; }
+
+/* ---------- 유형별 상단 정보 (사업계획서 19장) ---------- */
+.care-tips { margin: 0 0 12px; padding: 14px 16px; border-radius: var(--radius-sm); background: #fff3c4; }
+.care-tips strong { display: block; margin-bottom: 4px; color: #7a4a00; font-size: 14px; }
+.care-tips p { margin: 0; color: var(--text); font-size: 16px; line-height: 1.5; }
+.top-info { margin: 0 0 14px; padding: 6px 18px; }
+.top-info-row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; font-size: 16px; }
+.top-info-row + .top-info-row { border-top: 1px solid var(--line); }
+.top-info-row dt { flex: none; color: var(--text-2); }
+.top-info-row dd { margin: 0; text-align: right; font-weight: 700; }
+
+/* ---------- 보험 정보 (여러 개) ---------- */
+.insurance-card { padding-bottom: 16px; }
+.insurance-call { margin-top: 10px; min-height: 48px; }
+
+/* ---------- 보호자 대응 중 (11/18) ---------- */
+.responding { padding-bottom: 16px; }
+.responding-status { display: flex; align-items: flex-start; gap: 10px; margin: 6px 0 12px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+.responding-status svg { width: 22px; height: 22px; flex: none; color: var(--text-3); }
+.responding-status strong { color: var(--text); font-size: 16px; }
+.responding--on .responding-status svg { color: var(--green); }
+.responding--on .responding-status:last-child { margin-bottom: 0; }

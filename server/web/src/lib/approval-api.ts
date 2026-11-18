@@ -22,6 +22,8 @@ export interface ApprovalView {
     approvedUntil?: string;
     /** 결정한 보호자: 나 / 다른 보호자 / 아직 없음 */
     decidedBy: 'me' | 'other' | null;
+    /** [제가 대응할게요]를 마지막으로 누른 보호자 (11/18). 다른 보호자는 주소록 이름으로 보인다 */
+    responding: { by: 'me' | 'other'; name: string; at: string } | null;
   };
   myDecision: 'approve' | 'deny' | null;
   /** false 면 이 보호자는 이 태그 알림을 해제했다 */
@@ -40,6 +42,8 @@ export interface ApprovalApi {
   decide(decision: 'approve' | 'deny', durationMinutes: number): Promise<DecisionResult>;
   /** 이 태그의 알림 그만 받기 (태그 비상연락처에서 내 번호를 뺀다) */
   optOut(): Promise<ApprovalView>;
+  /** 다른 보호자와 신고자에게 대응 중이라고 알린다 */
+  respond(): Promise<ApprovalView>;
 }
 
 export const DEMO_APPROVE_TOKEN = 'demo';
@@ -50,6 +54,7 @@ function createHttpApprovalApi(token: string): ApprovalApi {
     get: () => request<ApprovalView>('GET', url),
     decide: (decision, durationMinutes) => request<DecisionResult>('POST', url, { decision, durationMinutes }),
     optOut: () => request<ApprovalView>('POST', `${url}/opt-out`),
+    respond: () => request<ApprovalView>('POST', `${url}/respond`),
   };
 }
 
@@ -71,6 +76,8 @@ function createMockApprovalApi(state: string | null): ApprovalApi {
       hasRequestedAccess: true,
       accessStatus: 'requested',
       decidedBy: null,
+      // 데모 ?state=responding: 다른 보호자가 먼저 대응 중
+      responding: state === 'responding' ? { by: 'other', name: '아빠', at: new Date(now - 60_000).toISOString() } : null,
     },
     myDecision: null,
     isSubscribed: true,
@@ -91,6 +98,11 @@ function createMockApprovalApi(state: string | null): ApprovalApi {
       await delay(250);
       if (state === 'invalid') throw new ApiRequestError(404, 'approval_not_found', '승인 링크가 올바르지 않습니다.');
       if (state === 'expired') throw new ApiRequestError(410, 'approval_expired', '승인 링크가 만료되었습니다.');
+      return snapshot();
+    },
+    async respond() {
+      await delay(300);
+      view.alert.responding = { by: 'me', name: '나', at: new Date().toISOString() };
       return snapshot();
     },
     async optOut() {

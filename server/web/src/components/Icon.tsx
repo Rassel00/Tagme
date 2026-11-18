@@ -14,6 +14,7 @@ export function IconSprite() {
         <symbol id="i-lock" viewBox="0 0 24 24"><path fill="currentColor" d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v9c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM9 7a3 3 0 0 1 6 0v2H9zm4 9.7V18h-2v-1.3a2 2 0 1 1 2 0z" /></symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" d="m5 12.5 4.5 4.5L19 7.5" /></symbol>
         <symbol id="i-pin" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 4 5v6c0 5 3.4 9.5 8 11 4.6-1.5 8-6 8-11V5zm1 13h-2v-3H8v-2h3V7h2v3h3v2h-3z" /></symbol>
         <symbol id="i-clock" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" d="M12 7v5l3 2" /><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2" /></symbol>
       </defs>
     </svg>
@@ -21,7 +22,7 @@ export function IconSprite() {
 }
 
 export type IconName =
-  | 'phone' | 'heart' | 'aed' | 'pulse' | 'chevron' | 'back' | 'user' | 'warn' | 'lock' | 'check' | 'pin' | 'clock';
+  | 'phone' | 'heart' | 'aed' | 'pulse' | 'chevron' | 'back' | 'user' | 'warn' | 'lock' | 'check' | 'pin' | 'clock' | 'shield';
 
 export function Icon({ name, className }: { name: IconName; className?: string }) {
   return (

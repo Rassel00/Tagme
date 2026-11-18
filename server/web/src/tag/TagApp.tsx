@@ -13,6 +13,7 @@ import { ApiRequestError } from '../lib/types';
 import { AedView } from './AedView';
 import { api, isAedOnly, readStoredAlertId, storeAlertId, tagId } from './context';
 import { InfoView } from './InfoView';
+import { InsuranceView } from './InsuranceView';
 import { MainView } from './MainView';
 
 const POLL_INTERVAL_MS = 3000;
@@ -83,9 +84,13 @@ export function TagApp() {
     };
   }, []);
 
-  // 승인 대기·공개 중·거절 상태면 3초마다 확인 (다른 보호자가 승인할 수 있음)
+  // 승인 대기·공개 중·거절 상태면 3초마다 확인 (다른 보호자가 승인할 수 있음).
+  // 보호자가 대응 중이라고 알릴 때까지도 확인한다 (11/18, 이 화면을 연 뒤 30분까지)
+  const [openedAt] = useState(() => Date.now());
   const status = alert?.accessStatus;
-  const shouldPoll = Boolean(alertId) && (status === 'requested' || status === 'approved' || status === 'denied');
+  const isWaitingResponse = Boolean(alert) && !alert?.guardianRespondingAt && Date.now() - openedAt < 30 * 60_000;
+  const shouldPoll =
+    Boolean(alertId) && (status === 'requested' || status === 'approved' || status === 'denied' || isWaitingResponse);
   useInterval(
     () => {
       if (!document.hidden) void refreshAlert();
@@ -93,16 +98,19 @@ export function TagApp() {
     shouldPoll ? POLL_INTERVAL_MS : null,
   );
 
-  let view: 'aed' | 'info' | 'main' | 'loading' | 'error';
+  let view: 'aed' | 'info' | 'insurance' | 'main' | 'loading' | 'error';
   if (isAedOnly) view = 'aed';
-  else if (load.kind === 'ready') view = route === 'info' || route === 'aed' ? route : 'main';
+  else if (load.kind === 'ready') view = route === 'info' || route === 'aed' || route === 'insurance' ? route : 'main';
   else if (load.kind === 'basic') view = route === 'aed' ? 'aed' : 'main';
   else view = load.kind;
 
   useLayoutEffect(() => {
-    document.body.classList.toggle('is-sub', view === 'info' || view === 'aed');
+    document.body.classList.toggle('is-sub', view === 'info' || view === 'aed' || view === 'insurance');
     window.scrollTo(0, 0);
   }, [view]);
+
+  // 보호자가 승인하면 비공개 항목도 상단 정보·보험 정보에 함께 보인다
+  const unlocked = alert?.accessStatus === 'approved' ? alert.emergencyInfo ?? {} : {};
 
   let content;
   if (view === 'aed') {
@@ -113,6 +121,14 @@ export function TagApp() {
     content = <ErrorView title={load.title} description={load.description} hasCall119 />;
   } else if (load.kind === 'basic') {
     content = <MainView />;
+  } else if (view === 'insurance') {
+    content = (
+      <InsuranceView
+        tag={load.tag}
+        unlockedInsurances={alert?.accessStatus === 'approved' ? alert.insurances : undefined}
+        onBack={goBack}
+      />
+    );
   } else if (view === 'info') {
     content = (
       <InfoView
@@ -129,8 +145,12 @@ export function TagApp() {
   } else {
     content = (
       <MainView
+        guardianRespondingAt={alert?.guardianRespondingAt ?? null}
         tag={{
           contactCount: load.tag.contactCount,
+          personType: load.tag.personType ?? 'general',
+          values: { ...load.tag.publicInfo, ...unlocked },
+          hasInsurance: (load.tag.insuranceCount ?? 0) > 0,
           onContact: async (position, memo) => {
             const result = await createAlert('contact', position, memo);
             await refreshAlert(result.alertId);

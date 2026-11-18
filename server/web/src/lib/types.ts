@@ -7,14 +7,37 @@ export type ProfileField =
   | 'conditions'
   | 'allergies'
   | 'medications'
-  | 'notes';
+  | 'notes'
+  | 'disabilityType'
+  | 'communication'
+  | 'careTips';
+
+/** 잠긴 항목: 응급정보 항목 + 보험 목록 전체('insurances') */
+export type LockedField = ProfileField | 'insurances';
+
+export interface Insurance {
+  /** 보험사·상품 이름 (예: OO손해보험) */
+  company: string;
+  phone: string;
+  note: string;
+}
+
+/** 대상자 유형 (11/18). 응급 화면의 제목과 상단에 먼저 보여 줄 항목이 달라진다 */
+export type PersonType = 'general' | 'disabled' | 'elderly' | 'child';
 
 export type ProfileValues = Partial<Record<ProfileField, string>>;
 
 export interface PublicTag {
+  personType: PersonType;
   publicInfo: ProfileValues;
-  lockedFields: ProfileField[];
+  lockedFields: LockedField[];
+  /** 공개된 보험 목록 (비공개면 빈 배열이고 lockedFields 에 'insurances') */
+  insurances: Insurance[];
+  /** 등록된 보험 수 (공개 여부와 무관). 0 이 아니면 "보험 정보" 버튼 */
+  insuranceCount: number;
   contactCount: number;
+  /** 수락한 보호자 수. 열람 요청은 보호자에게만 가므로 0 이면 열람 요청을 막는다 */
+  guardianCount: number;
 }
 
 export type AlertAction = 'contact' | 'requestAccess';
@@ -33,6 +56,10 @@ export interface AlertStatus {
   accessStatus: AccessStatus;
   approvedUntil?: string;
   emergencyInfo?: ProfileValues;
+  /** 승인되면 비공개였던 보험 목록 */
+  insurances?: Insurance[];
+  /** 보호자가 [제가 대응할게요]를 누른 시각 (누구인지는 신고자에게 보이지 않는다) */
+  guardianRespondingAt?: string | null;
 }
 
 export interface Aed {

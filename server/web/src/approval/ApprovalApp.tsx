@@ -81,6 +81,20 @@ export function ApprovalApp() {
     }
   }
 
+  const [isResponding, setIsResponding] = useState(false);
+
+  async function respond(): Promise<void> {
+    setIsResponding(true);
+    try {
+      setView(await api.respond());
+    } catch (e) {
+      if (e instanceof ApiRequestError && (e.status === 404 || e.status === 410)) setError(e);
+      else setNotice(`대응 중 표시를 하지 못했습니다. ${errorMessage(e)}`);
+    } finally {
+      setIsResponding(false);
+    }
+  }
+
   async function optOut(): Promise<void> {
     setOptOutNotice(undefined);
     try {
@@ -110,6 +124,8 @@ export function ApprovalApp() {
         onExpired={() => void refresh()}
         optOutNotice={optOutNotice}
         onOptOut={() => setIsOptOutOpen(true)}
+        isResponding={isResponding}
+        onRespond={() => void respond()}
       />
     );
   }
@@ -158,6 +174,8 @@ function MainView({
   onExpired,
   optOutNotice,
   onOptOut,
+  isResponding,
+  onRespond,
 }: {
   view: ApprovalView;
   durationMinutes: number;
@@ -169,8 +187,11 @@ function MainView({
   onExpired: () => void;
   optOutNotice?: string;
   onOptOut: () => void;
+  isResponding: boolean;
+  onRespond: () => void;
 }) {
   const { alert } = view;
+  const responding = alert.responding;
 
   return (
     <section className="view">
@@ -251,6 +272,47 @@ function MainView({
         <Icon name="phone" />
         119에 신고하기
       </a>
+
+      {/* 대응 중 표시 (11/18): 보호자가 여러 명이면 누가 대응하고 있는지 서로 알 수 있게 */}
+      <section className={responding ? 'card responding responding--on' : 'card responding'} aria-live="polite">
+        {responding?.by === 'me' ? (
+          <p className="responding-status">
+            <Icon name="check" />
+            <span>
+              <strong>내가 대응 중이에요</strong> · {formatTime(responding.at)}
+              <br />
+              다른 보호자와 신고자에게 대응 중이라고 보이고 있어요.
+            </span>
+          </p>
+        ) : (
+          <>
+            <p className="responding-status">
+              <Icon name={responding ? 'check' : 'user'} />
+              <span>
+                {responding ? (
+                  <>
+                    <strong>{responding.name}님이 대응 중이에요</strong> · {formatTime(responding.at)}
+                  </>
+                ) : (
+                  <>
+                    <strong>아직 대응 중인 보호자가 없어요</strong>
+                    <br />
+                    직접 대응한다면 다른 보호자와 신고자에게 알려 주세요.
+                  </>
+                )}
+              </span>
+            </p>
+            <button
+              type="button"
+              className={responding ? 'btn btn-outline btn-block' : 'btn btn-primary btn-block'}
+              disabled={isResponding}
+              onClick={onRespond}
+            >
+              {isResponding ? '알리는 중…' : responding ? '저도 대응할게요' : '제가 대응할게요'}
+            </button>
+          </>
+        )}
+      </section>
 
       {/* 승인·거절 (GRD-03) */}
       <DecisionPanel

@@ -13,8 +13,16 @@ const FIELD_GROUPS: { title: string; icon: IconName; fields: [ProfileField, stri
     icon: 'heart',
     fields: [['conditions', '지병'], ['allergies', '알레르기'], ['medications', '복용 중인 약']],
   },
+  {
+    title: '장애·의사소통',
+    icon: 'user',
+    fields: [['disabilityType', '장애 유형'], ['communication', '의사소통'], ['careTips', '대하는 법']],
+  },
   { title: '유의사항', icon: 'warn', fields: [['notes', '유의사항']] },
 ];
+
+/** 값이 하나도 없는 그룹(공개도 비공개도 아닌)은 숨긴다. 기본 세 그룹은 항상 보인다 */
+const OPTIONAL_GROUPS = new Set(['장애·의사소통']);
 
 /** 사용자 응급정보 (WEB-03) + 보호자 열람 요청 (WEB-04) */
 export function InfoView({
@@ -36,7 +44,11 @@ export function InfoView({
     <section className="view">
       <Topbar title="사용자 응급정보" onBack={onBack} />
       <div>
-        {FIELD_GROUPS.map((group) => (
+        {FIELD_GROUPS.filter(
+          (group) =>
+            !OPTIONAL_GROUPS.has(group.title) ||
+            group.fields.some(([field]) => tag.publicInfo[field] || tag.lockedFields.includes(field)),
+        ).map((group) => (
           <section className="card" key={group.title}>
             <h2 className="card-title">
               <Icon name={group.icon} />
@@ -74,7 +86,7 @@ export function InfoView({
         ))}
       </div>
       {tag.lockedFields.length > 0 && (
-        <AccessPanel lockedCount={tag.lockedFields.length} alert={alert} onRequestAccess={onRequestAccess} onExpired={onExpired} />
+        <AccessPanel lockedCount={tag.lockedFields.length} hasGuardian={(tag.guardianCount ?? 0) > 0} alert={alert} onRequestAccess={onRequestAccess} onExpired={onExpired} />
       )}
     </section>
   );
@@ -82,11 +94,14 @@ export function InfoView({
 
 function AccessPanel({
   lockedCount,
+  hasGuardian,
   alert,
   onRequestAccess,
   onExpired,
 }: {
   lockedCount: number;
+  /** 열람 요청을 승인할 보호자가 있는지 (11/18) */
+  hasGuardian: boolean;
   alert?: AlertStatus;
   onRequestAccess: (position: LatLng | null) => Promise<void>;
   onExpired: () => void;
@@ -124,8 +139,17 @@ function AccessPanel({
             <Icon name="lock" />
             잠긴 항목 {lockedCount}개
           </p>
-          <p>보호자가 승인하면 잠긴 응급정보를 볼 수 있어요.</p>
-          <button type="button" className="btn btn-primary btn-block" disabled={isRequesting} onClick={() => void requestAccess()}>
+          <p>
+            {hasGuardian
+              ? '보호자가 승인하면 잠긴 응급정보를 볼 수 있어요.'
+              : '열람을 승인할 보호자가 등록되어 있지 않아 잠긴 정보를 볼 수 없어요. 위급하면 119에 신고하세요.'}
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-block"
+            disabled={isRequesting || !hasGuardian}
+            onClick={() => void requestAccess()}
+          >
             {isRequesting ? '요청 중…' : '보호자에게 열람 요청'}
           </button>
         </>
