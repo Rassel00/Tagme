@@ -8,15 +8,15 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "npm run build:web && tsx watch src/index.ts",
-    "dev:web": "tsc -p tsconfig.web.json --watch",
+    "dev": "tsx scripts/dev.ts",
+    "dev:web": "vite build --watch",
     "build": "tsc -p tsconfig.json && npm run build:web",
-    "build:web": "tsc -p tsconfig.web.json",
+    "build:web": "vite build",
     "start": "node dist/src/index.js",
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "aed:sync": "tsx scripts/aed-sync.ts",
-    "test": "tsx scripts/run-tests.ts",
+    "test": "npm run build:web && tsx scripts/run-tests.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit"
   },
   "dependencies": {
@@ -24,13 +24,19 @@
     "express": "^5.3.0",
     "firebase-admin": "^13.10.0",
     "pg": "^8.23.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^20.19.43",
     "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
   }
 }

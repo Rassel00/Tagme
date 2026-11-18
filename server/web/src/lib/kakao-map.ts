@@ -3,9 +3,8 @@
  * SDK 는 AED 화면을 열 때만 불러온다 (응급 페이지 첫 화면을 느리게 하지 않도록).
  * 키가 없거나 불러오지 못하면 호출한 쪽에서 약식 지도로 대신한다.
  */
-import { h } from './dom.js';
-import { directionsUrl, formatDistance } from './geo.js';
-import type { Aed, LatLng } from './types.js';
+import { directionsUrl, formatDistance } from './geo';
+import type { Aed, LatLng } from './types';
 
 const SDK_TIMEOUT_MS = 8000;
 
@@ -17,6 +16,18 @@ declare global {
   interface Window {
     kakao?: { maps: KakaoMaps };
   }
+}
+
+/** SDK 오버레이에 넘길 DOM 요소 생성. 문자열은 textContent 로만 넣는다 */
+function el<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  attrs: Record<string, string>,
+  ...children: (Node | string)[]
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  node.append(...children);
+  return node;
 }
 
 let sdkPromise: Promise<KakaoMaps> | undefined;
@@ -61,7 +72,7 @@ export function loadKakaoMaps(appKey: string): Promise<KakaoMaps> {
  * 지도가 모든 지점을 담도록 범위를 맞춘다.
  */
 export function renderKakaoAedMap(maps: KakaoMaps, container: HTMLElement, center: LatLng, aeds: Aed[]): void {
-  const mapEl = h('div', { class: 'kakao-map', role: 'application', 'aria-label': '주변 AED 지도' });
+  const mapEl = el('div', { class: 'kakao-map', role: 'application', 'aria-label': '주변 AED 지도' });
   container.replaceChildren(mapEl);
   container.classList.add('aed-map--kakao');
 
@@ -84,16 +95,16 @@ export function renderKakaoAedMap(maps: KakaoMaps, container: HTMLElement, cente
     const position = new maps.LatLng(aed.lat, aed.lng);
     bounds.extend(position);
 
-    const pin = h('button', { type: 'button', class: 'kakao-pin', 'aria-label': `${aed.name} ${formatDistance(aed.distanceM)}` }, String(index + 1));
+    const pin = el('button', { type: 'button', class: 'kakao-pin', 'aria-label': `${aed.name} ${formatDistance(aed.distanceM)}` }, String(index + 1));
     const info = new maps.CustomOverlay({
       position,
       yAnchor: 1.45,
       zIndex: 5,
-      content: h(
+      content: el(
         'a',
         { class: 'kakao-info', href: directionsUrl(aed.name, aed), target: '_blank', rel: 'noopener' },
-        h('strong', {}, aed.name),
-        h('span', {}, `${formatDistance(aed.distanceM)} · 길찾기`),
+        el('strong', {}, aed.name),
+        el('span', {}, `${formatDistance(aed.distanceM)} · 길찾기`),
       ),
     });
     pin.addEventListener('click', () => {

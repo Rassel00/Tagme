@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import { createApp } from '../src/app.js';
 
+// HTML 은 Vite 빌드 결과(web/dist)를 보낸다. npm test 가 먼저 build:web 을 실행한다
 describe('웹 페이지 라우트 (DB 불필요)', () => {
   let server: import('node:http').Server;
   let baseUrl = '';
@@ -18,10 +19,10 @@ describe('웹 페이지 라우트 (DB 불필요)', () => {
   });
 
   // /t·/aed 는 카카오맵 도메인 확인 때문에 도메인만 보내고(strict-origin), /a 는 아예 보내지 않는다
-  for (const [path, script, referrer] of [
-    ['/t/SomeTagId', '/js/tag-page.js', 'strict-origin'],
-    ['/aed', '/js/tag-page.js', 'strict-origin'],
-    ['/a/SomeApproveToken', '/js/approval-page.js', 'no-referrer'],
+  for (const [path, title, referrer] of [
+    ['/t/SomeTagId', '응급 지원 페이지', 'strict-origin'],
+    ['/aed', '응급 지원 페이지', 'strict-origin'],
+    ['/a/SomeApproveToken', '보호자 확인', 'no-referrer'],
   ] as const) {
     it(`${path} 는 HTML 을 주고 주소 경로가 새지 않게 막는다`, async () => {
       const res = await fetch(baseUrl + path);
@@ -30,7 +31,18 @@ describe('웹 페이지 라우트 (DB 불필요)', () => {
       assert.equal(res.headers.get('referrer-policy'), referrer);
       assert.equal(res.headers.get('x-robots-tag'), 'noindex, nofollow');
       assert.equal(res.headers.get('cache-control'), 'no-store');
-      assert.ok((await res.text()).includes(script));
+      const html = await res.text();
+      assert.ok(html.includes(`<title>${title}`));
+      assert.match(html, /<script type="module"[^>]*src="\/assets\/[^"]+\.js"/);
     });
   }
+
+  it('해시가 붙은 /assets/* 는 오래 캐시한다', async () => {
+    const html = await (await fetch(`${baseUrl}/t/SomeTagId`)).text();
+    const script = /src="(\/assets\/[^"]+\.js)"/.exec(html)?.[1];
+    assert.ok(script);
+    const res = await fetch(baseUrl + script);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('cache-control') ?? '', /immutable/);
+  });
 });

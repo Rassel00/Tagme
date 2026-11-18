@@ -2,9 +2,9 @@
  * /t/demo 전용 가짜 API. 서버·DB 없이 시안 화면과 흐름(신고 → 승인 대기 → 승인 → 만료)을 확인한다.
  * ?state=notfound | inactive | nocontact 로 예외 화면도 볼 수 있다.
  */
-import { distanceMeters } from './geo.js';
-import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types.js';
-import { ApiRequestError } from './types.js';
+import { distanceMeters } from './geo';
+import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types';
+import { ApiRequestError } from './types';
 
 /** 위치 권한이 없을 때 데모에서 쓰는 기준 위치 (개발 문서 예시 좌표) */
 export const DEMO_POSITION: LatLng = { lat: 37.2939, lng: 126.9744 };

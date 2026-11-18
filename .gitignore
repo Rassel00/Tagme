@@ -3,8 +3,8 @@ dist/
 .env.keys
 *.log
 
-# 웹 클라이언트 빌드 결과 (server/web/src → server/web/public/js)
-server/web/public/js/
+# 웹 클라이언트 빌드 결과 (Vite, server/web → server/web/dist)
+server/web/dist/
 
 # Flutter / Android
 app/build/
