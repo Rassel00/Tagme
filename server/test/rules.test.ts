@@ -127,7 +127,7 @@ describe('공개 범위 (BE-03)', () => {
   });
 });
 
-describe('보호자·연락처 메모 문자 (11/18)', () => {
+describe('보호자·연락처 문자 (11/18)', () => {
   const base = {
     userName: '김지우',
     message: '긴급상황입니다',
@@ -147,11 +147,6 @@ describe('보호자·연락처 메모 문자 (11/18)', () => {
     assert.ok(!other.includes('/a/'));
     assert.ok(!other.includes('열람을 요청'));
     assert.match(other, /위급하면 119에 먼저 신고해 주세요\.$/);
-  });
-
-  it('등록자가 연락처에 남긴 메모는 공통 메시지 다음 줄에', () => {
-    const body = renderGuardianSms({ ...base, approveUrl: null, contactMemo: ' 회사면 엄마에게 연락 ' });
-    assert.match(body, /긴급상황입니다\n메모: 회사면 엄마에게 연락\n/);
   });
 
   it('수락 안내 문자는 보호자 여부에 따라 안내가 다르다', () => {

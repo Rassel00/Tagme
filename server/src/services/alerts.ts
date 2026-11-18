@@ -76,9 +76,10 @@ export async function notifyGuardians(
   now: Date,
   audience: NotifyAudience = 'all',
 ): Promise<number> {
-  // 주소록을 참조하므로 보호자가 번호를 고치면 바로 새 번호로 보낸다. 수락한 연락처에게만 (11/18)
-  const { rows: all } = await client.query<{ id: string; phone: string; message: string | null; is_guardian: boolean }>(
-    `SELECT c.id, c.phone, tc.message, tc.is_guardian FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
+  // 주소록을 참조하므로 보호자가 번호를 고치면 바로 새 번호로 보낸다. 수락한 연락처에게만 (11/18).
+  // 연락처별 등록자 메모(tag_contacts.message)는 11/18 에 기능을 없애 문자에 넣지 않는다
+  const { rows: all } = await client.query<{ id: string; phone: string; is_guardian: boolean }>(
+    `SELECT c.id, c.phone, tc.is_guardian FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
      WHERE tc.tag_id = $1 AND tc.invite_status = 'accepted' ORDER BY tc.sort_order`,
     [tag.id],
   );
@@ -103,7 +104,6 @@ export async function notifyGuardians(
     const body = renderGuardianSms({
       userName: person?.name ?? '',
       message: tag.defaultMessage,
-      contactMemo: contact.message,
       lat: alert.lat,
       lng: alert.lng,
       rescuerPhone: alert.rescuerPhone,

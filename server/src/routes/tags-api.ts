@@ -79,9 +79,8 @@ async function tagDetail(publicId: string, userId: string) {
     invite_status: InviteStatus;
     invited_at: Date | null;
     is_guardian: boolean;
-    message: string | null;
   }>(
-    `SELECT c.id, c.name, c.relation, c.phone, tc.invite_status, tc.invited_at, tc.is_guardian, tc.message
+    `SELECT c.id, c.name, c.relation, c.phone, tc.invite_status, tc.invited_at, tc.is_guardian
      FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
      WHERE tc.tag_id = $1 ORDER BY tc.sort_order`,
     [tag.id],
@@ -98,8 +97,6 @@ async function tagDetail(publicId: string, userId: string) {
       invitedAt: c.invited_at?.toISOString() ?? null,
       /** 보호자만 응급정보 열람 승인 링크를 받는다 */
       isGuardian: c.is_guardian,
-      /** 이 연락처 문자에 함께 가는 등록자 메모 */
-      message: c.message ?? '',
     })),
   };
 }
@@ -110,21 +107,19 @@ const tagBody = z.object({
   personId: z.uuid().nullable().default(null),
   /** 주소록 연락처 ID, 순서대로 (최대 3명, 중복 불가). contacts 를 보내면 무시 (이전 앱 호환) */
   contactIds: z.array(z.uuid()).optional(),
-  /** 연락처별 보호자 여부·메모 (11/18) */
+  /** 연락처별 보호자 여부 (11/18). 예전 앱이 보내는 message(연락처별 메모)는 기능을 없애 무시한다 */
   contacts: z
     .array(
       z.object({
         contactId: z.uuid(),
         /** 보호자만 응급정보 열람 승인 링크를 받는다 */
         isGuardian: z.boolean().default(true),
-        /** 이 연락처 문자에 함께 보낼 등록자 메모 */
-        message: z.string().trim().max(100).default(''),
       }),
     )
     .optional(),
 }).transform(({ contactIds, contacts, ...rest }) => ({
   ...rest,
-  links: contacts ?? (contactIds ?? []).map((contactId) => ({ contactId, isGuardian: true, message: '' })),
+  links: contacts ?? (contactIds ?? []).map((contactId) => ({ contactId, isGuardian: true })),
 })).superRefine((body, ctx) => {
   if (body.links.length > LIMITS.maxContactsPerTag) {
     ctx.addIssue({ code: 'custom', message: `연락처는 최대 ${LIMITS.maxContactsPerTag}명까지 선택할 수 있습니다.` });
@@ -174,12 +169,12 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
       [tagId, body.label, body.defaultMessage, body.personId],
     );
     await client.query('DELETE FROM tag_contacts WHERE tag_id = $1', [tagId]);
-    for (const [index, { contactId, isGuardian, message }] of body.links.entries()) {
+    for (const [index, { contactId, isGuardian }] of body.links.entries()) {
       const prev = kept.get(contactId);
       await client.query(
         `INSERT INTO tag_contacts (tag_id, contact_id, sort_order, invite_status, invite_token_hash, invited_at, responded_at,
-                                   is_guardian, message)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                                   is_guardian)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           tagId,
           contactId,
@@ -189,7 +184,6 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
           prev?.invited_at ?? null,
           prev?.responded_at ?? null,
           isGuardian,
-          message || null,
         ],
       );
     }

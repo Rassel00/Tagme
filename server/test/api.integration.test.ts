@@ -690,7 +690,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.equal(rows[0]!.n, 1);
   });
 
-  it('보호자·연락처 메모: 열람 요청은 보호자에게만, 연락하기는 보호자 아닌 연락처에게 위치 알림만', async () => {
+  it('보호자·연락처: 열람 요청은 보호자에게만, 연락하기는 보호자 아닌 연락처에게 위치 알림만', async () => {
     // 앞 테스트에서 비활성·번호 변경·만료된 상태를 시연 가능하게 되돌린다
     await call('PATCH', `/api/tags/${tagId}/active`, { token: owner, body: { isActive: true } });
     await pool.query(`UPDATE alerts SET closed_at = now()`);
@@ -703,16 +703,17 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
         defaultMessage: '긴급상황입니다',
         contacts: [
           { contactId: contactIds[0], isGuardian: true },
+          // 예전 앱이 보내는 연락처별 메모는 무시한다 (11/18 기능 제거)
           { contactId: contactIds[1], isGuardian: false, message: '회사면 엄마에게 연락해 주세요' },
         ],
       },
     });
     assert.equal(put.status, 200);
     assert.deepEqual(
-      put.json.contacts.map((c: { isGuardian: boolean; message: string }) => [c.isGuardian, c.message]),
+      put.json.contacts.map((c: { isGuardian: boolean; message?: string }) => [c.isGuardian, c.message]),
       [
-        [true, ''],
-        [false, '회사면 엄마에게 연락해 주세요'],
+        [true, undefined],
+        [false, undefined],
       ],
     );
     const pub = await call('GET', `/api/public/tags/${tagId}`);
@@ -732,13 +733,13 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.deepEqual(jobs.map((j) => j.phone), [guardianPhone]);
     assert.match(jobs[0]!.body, /\/a\//);
 
-    // 2) 이어서 연락하기: 아직 못 받은 보호자 아닌 연락처에게만 위치 알림 (승인 링크 없음, 등록자 메모 포함)
+    // 2) 이어서 연락하기: 아직 못 받은 보호자 아닌 연락처에게만 위치 알림 (승인 링크 없음, 메모 줄 없음)
     const contact = await call('POST', `/api/public/tags/${tagId}/alerts`, { cookie, body: { action: 'contact' } });
     assert.equal(contact.json.notifiedCount, 1);
     jobs = await jobsOf(req.json.alertId);
     const other = jobs.find((j) => j.phone !== guardianPhone)!;
     assert.ok(!other.body.includes('/a/'));
-    assert.match(other.body, /메모: 회사면 엄마에게 연락해 주세요/);
+    assert.ok(!other.body.includes('회사면 엄마에게'));
 
     // 3) 보호자가 없으면 열람 요청 불가 (409)
     await call('PUT', `/api/tags/${tagId}`, {

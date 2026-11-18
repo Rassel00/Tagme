@@ -12,8 +12,6 @@ export interface GuardianSmsInput {
   /** 신고자가 확인 팝업에 남긴 메모 (연락처·상황 등) */
   rescuerMemo: string | null;
   hasRequestedAccess: boolean;
-  /** 태그 등록자가 이 연락처에 남긴 메모 (11/18) */
-  contactMemo?: string | null;
   /** 보호자만 승인 링크를 받는다. null 이면 위치 알림만 (보호자가 아닌 연락처) */
   approveUrl: string | null;
 }
@@ -56,7 +54,6 @@ export function renderGuardianSms(input: GuardianSmsInput): string {
   const location = input.lat !== null && input.lng !== null ? mapUrl(input.lat, input.lng) : '위치 정보 없음';
   const lines = [`[응급안심] ${name}님 응급 태그가 스캔되었습니다.`];
   if (input.message.trim()) lines.push(input.message.trim());
-  if (input.contactMemo?.trim()) lines.push(`메모: ${input.contactMemo.trim()}`);
   if (input.hasRequestedAccess && input.approveUrl) lines.push('신고자가 응급정보 열람을 요청했습니다.');
   if (input.rescuerMemo?.trim()) lines.push(`신고자 메모: ${input.rescuerMemo.trim()}`);
   lines.push(`위치: ${location}`);
