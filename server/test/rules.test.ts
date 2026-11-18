@@ -10,7 +10,7 @@ import {
   type MergeState,
   type ProfileRecord,
 } from '../src/domain/rules.js';
-import { formatPhone, renderGuardianSms } from '../src/domain/sms-template.js';
+import { formatPhone, renderGuardianSms, renderInviteSms } from '../src/domain/sms-template.js';
 
 const T0 = new Date('2026-11-17T10:00:00+09:00');
 const minutes = (n: number) => new Date(T0.getTime() + n * 60_000);
@@ -100,6 +100,9 @@ describe('공개 범위 (BE-03)', () => {
     allergies: '페니실린',
     medications: '',
     notes: '흡입기 필요',
+    disabilityType: '',
+    communication: '',
+    careTips: '',
     publicFields: ['bloodType', 'allergies', 'medications'],
   };
 
@@ -121,6 +124,39 @@ describe('공개 범위 (BE-03)', () => {
 
   it('응급정보가 없으면 빈 화면', () => {
     assert.deepEqual(toPublicView(null), { publicInfo: {}, lockedFields: [] });
+  });
+});
+
+describe('보호자·연락처 메모 문자 (11/18)', () => {
+  const base = {
+    userName: '김지우',
+    message: '긴급상황입니다',
+    lat: null,
+    lng: null,
+    rescuerPhone: null,
+    isRescuerVerified: false,
+    rescuerMemo: null,
+    hasRequestedAccess: true,
+  };
+
+  it('보호자는 승인 링크, 보호자가 아닌 연락처는 위치 알림만 (열람 요청 문구도 없음)', () => {
+    const guardian = renderGuardianSms({ ...base, approveUrl: 'https://example.com/a/T' });
+    assert.match(guardian, /신고자가 응급정보 열람을 요청했습니다/);
+    assert.match(guardian, /https:\/\/example\.com\/a\/T$/);
+    const other = renderGuardianSms({ ...base, approveUrl: null });
+    assert.ok(!other.includes('/a/'));
+    assert.ok(!other.includes('열람을 요청'));
+    assert.match(other, /위급하면 119에 먼저 신고해 주세요\.$/);
+  });
+
+  it('등록자가 연락처에 남긴 메모는 공통 메시지 다음 줄에', () => {
+    const body = renderGuardianSms({ ...base, approveUrl: null, contactMemo: ' 회사면 엄마에게 연락 ' });
+    assert.match(body, /긴급상황입니다\n메모: 회사면 엄마에게 연락\n/);
+  });
+
+  it('수락 안내 문자는 보호자 여부에 따라 안내가 다르다', () => {
+    assert.match(renderInviteSms({ userName: '김지우', inviteUrl: 'u', isGuardian: true }), /보호자로 회원님 번호가.*\n.*승인할 수 있습니다/);
+    assert.match(renderInviteSms({ userName: '김지우', inviteUrl: 'u', isGuardian: false }), /비상연락처로 회원님 번호가.*\n수락하면 응급 상황에 위치 알림/);
   });
 });
 

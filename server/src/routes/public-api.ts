@@ -161,9 +161,27 @@ export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
   router.get('/tags/:tagId', lookupLimiter, async (req, res) => {
     const tag = await findActiveTag(param(req, 'tagId'));
     const person = await findPersonForTag(getPool(), tag.id);
-    const { rows } = await getPool().query<{ count: string }>("SELECT count(*) FROM tag_contacts WHERE tag_id = $1 AND invite_status = 'accepted'", [tag.id]);
+    const { rows } = await getPool().query<{ count: string; guardians: string }>(
+      `SELECT count(*) AS count, count(*) FILTER (WHERE is_guardian) AS guardians
+       FROM tag_contacts WHERE tag_id = $1 AND invite_status = 'accepted'`,
+      [tag.id],
+    );
     res.set('Cache-Control', 'no-store');
-    res.json({ ...toPublicView(person), contactCount: Number(rows[0]?.count ?? 0) });
+    const view = toPublicView(person);
+    // 보험 목록 (11/18): 공개면 목록, 비공개면 잠긴 항목에 'insurances' 와 개수만
+    const insurances = person?.insurances ?? [];
+    const isInsurancePublic = person?.publicFields.includes('insurances') ?? false;
+    res.json({
+      ...view,
+      lockedFields: insurances.length > 0 && !isInsurancePublic ? [...view.lockedFields, 'insurances'] : view.lockedFields,
+      insurances: isInsurancePublic ? insurances : [],
+      insuranceCount: insurances.length,
+      // 유형별 응급 화면 (11/18). 대상자가 없으면 범용
+      personType: person?.personType ?? 'general',
+      contactCount: Number(rows[0]?.count ?? 0),
+      // 열람 요청은 보호자에게만 간다. 0 이면 웹에서 열람 요청 버튼을 막는다
+      guardianCount: Number(rows[0]?.guardians ?? 0),
+    });
   });
 
   // 신고 생성 또는 병합 (BE-04, 7.1)
@@ -176,6 +194,13 @@ export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
     const result = await withTransaction(async (client) => {
       // 같은 태그의 동시 신고를 직렬화
       const tag = await findActiveTag(publicId, client, true);
+      if (body.action === 'requestAccess') {
+        const { rows: guardians } = await client.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM tag_contacts WHERE tag_id = $1 AND invite_status = 'accepted' AND is_guardian`,
+          [tag.id],
+        );
+        if (!guardians[0]?.n) throw new ApiError(409, 'no_guardian', '열람을 승인할 보호자가 등록되어 있지 않습니다.');
+      }
 
       const existing = sessionToken ? await findAlert(client, 'session', hashToken(sessionToken), { forUpdate: true }) : null;
       if (existing && existing.tagId === tag.id && isAlertOpen(existing, now)) {
@@ -211,11 +236,15 @@ export function createPublicApiRouter(options: PublicApiOptions = {}): Router {
       // 신고자 본인 번호 (직접 입력 또는 문자 본인 확인). 이 신고의 세션 쿠키를 가진 신고자에게만 보인다
       rescuerPhone: alert.rescuerPhone,
       isRescuerVerified: alert.isRescuerVerified,
+      // 보호자가 [제가 대응할게요]를 누른 시각 (신고자에게는 누구인지 보여주지 않는다)
+      guardianRespondingAt: alert.respondingAt?.toISOString() ?? null,
     };
     if (status === 'approved') {
       const person = await findPersonForTag(getPool(), alert.tagId);
       response.approvedUntil = alert.approvedUntil?.toISOString();
       response.emergencyInfo = toLockedValues(person);
+      // 비공개 보험 목록도 승인되면 함께
+      if (person && !person.publicFields.includes('insurances')) response.insurances = person.insurances;
     }
     res.json(response);
   });
@@ -273,7 +302,14 @@ async function mergeAlert(
     [alert.id, plan.hasContacted, plan.hasRequestedAccess, plan.accessStatus, lat, lng, rescuerMemo],
   );
   const updated: AlertRow = { ...alert, ...plan, lat, lng, rescuerMemo };
-  const notifiedCount = plan.shouldNotify ? await notifyGuardians(client, updated, tag, now) : 0;
+  let notifiedCount = 0;
+  if (plan.shouldNotify) {
+    // 같은 버튼을 5분 뒤 다시 누름: 재알림 (연락하기는 전원, 열람 요청은 보호자)
+    notifiedCount = await notifyGuardians(client, updated, tag, now, body.action === 'contact' ? 'all' : 'guardians');
+  } else if (body.action === 'contact' && !alert.hasContacted) {
+    // 열람 요청 뒤 처음 연락하기: 보호자는 이미 받았으니 보호자 아닌 연락처에게만 위치 알림
+    notifiedCount = await notifyGuardians(client, updated, tag, now, 'others');
+  }
   return { response: { alertId: alert.id, code: alert.code, notifiedCount, isMerged: true } };
 }
 
@@ -322,6 +358,6 @@ async function createAlert(
     ],
   );
   const alert = (await findAlert(client, 'id', rows[0]!.id))!;
-  const notifiedCount = await notifyGuardians(client, alert, tag, now);
+  const notifiedCount = await notifyGuardians(client, alert, tag, now, body.action === 'contact' ? 'all' : 'guardians');
   return { sessionToken, response: { alertId: alert.id, code: alert.code, notifiedCount, isMerged: false } };
 }

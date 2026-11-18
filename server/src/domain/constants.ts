@@ -7,8 +7,24 @@ export const PROFILE_FIELDS = [
   'allergies',
   'medications',
   'notes',
+  // 11/18 유형별 항목 (주로 장애인 유형). 다른 항목처럼 공개·비공개를 고른다
+  'disabilityType',
+  'communication',
+  'careTips',
 ] as const;
 export type ProfileField = (typeof PROFILE_FIELDS)[number];
+
+/**
+ * 공개 여부를 고르는 키: 응급정보 항목 + 보험 목록(11/18). 보험은 여러 개라도 공개 여부를 한 번에 정한다
+ */
+export const PUBLIC_FIELDS = [...PROFILE_FIELDS, 'insurances'] as const;
+export type PublicField = (typeof PUBLIC_FIELDS)[number];
+
+export const MAX_INSURANCES_PER_PERSON = 3;
+
+/** 대상자 유형 (11/18, 사업계획서 19장). 웹 응급 화면의 제목과 상단에 먼저 보여 줄 항목이 달라진다 */
+export const PERSON_TYPES = ['general', 'disabled', 'elderly', 'child'] as const;
+export type PersonType = (typeof PERSON_TYPES)[number];
 
 /** 동의 항목 (개발 문서 4.1 APP-02) */
 export const REQUIRED_CONSENT_TYPES = [

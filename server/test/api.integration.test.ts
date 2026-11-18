@@ -228,7 +228,7 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
         `SELECT body FROM sms_jobs WHERE phone = $1 AND tag_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`,
         [phone],
       );
-      assert.match(rows[0]!.body, /^\[응급안심\] 김지우님의 응급 태그 비상연락처로 회원님 번호가 등록되었습니다\./);
+      assert.match(rows[0]!.body, /^\[응급안심\] 김지우님의 응급 태그 보호자로 회원님 번호가 등록되었습니다\./);
       return /\/c\/([A-Za-z0-9_-]{43})$/.exec(rows[0]!.body)![1]!;
     };
     const momToken = await inviteToken(PHONES[0]!);
@@ -286,6 +286,68 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.ok(!pub.text.includes('김지우'));
 
     assert.equal((await call('GET', '/api/public/tags/NoSuchTag000000000000000')).status, 404);
+  });
+
+  it('대상자 유형·유형별 항목·보험 정보: 공개한 것만 공개 화면에', async () => {
+    const base = {
+      name: '김지우',
+      birthDate: '2003-05-14',
+      bloodType: 'A형 (Rh+)',
+      conditions: '천식',
+      allergies: '페니실린',
+      medications: '천식 흡입기 (살부타몰)',
+      notes: '응급 시 천식 흡입기 사용이 필요합니다.',
+    };
+    assert.equal(
+      (await call('PUT', `/api/persons/${personId}`, { token: owner, body: { ...base, personType: 'robot' } })).status,
+      400,
+    );
+    assert.equal(
+      (
+        await call('PUT', `/api/persons/${personId}`, {
+          token: owner,
+          body: { ...base, insurances: [{ company: 'A', phone: '1588-가나' }] },
+        })
+      ).status,
+      400,
+    );
+    const four = Array.from({ length: 4 }, () => ({ company: 'A' }));
+    assert.equal((await call('PUT', `/api/persons/${personId}`, { token: owner, body: { ...base, insurances: four } })).status, 400);
+    const saved = await call('PUT', `/api/persons/${personId}`, {
+      token: owner,
+      body: {
+        ...base,
+        personType: 'disabled',
+        disabilityType: '청각장애',
+        communication: '필담',
+        careTips: '글로 써서 보여 주세요',
+        insurances: [
+          { company: '응급손해보험', phone: '1588-0000', note: '증권번호 123' },
+          { company: '실손생명' },
+        ],
+        // 보험은 공개하지 않음 (승인 후 보기)
+        publicFields: ['bloodType', 'allergies', 'disabilityType', 'communication', 'careTips'],
+      },
+    });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.json.personType, 'disabled');
+    assert.deepEqual(
+      saved.json.insurances.map((i: { company: string }) => i.company),
+      ['응급손해보험', '실손생명'],
+    );
+    const pub = await call('GET', `/api/public/tags/${tagId}`);
+    assert.equal(pub.json.personType, 'disabled');
+    assert.deepEqual(pub.json.publicInfo, {
+      bloodType: 'A형 (Rh+)',
+      allergies: '페니실린',
+      disabilityType: '청각장애',
+      communication: '필담',
+      careTips: '글로 써서 보여 주세요',
+    });
+    assert.ok(pub.json.lockedFields.includes('insurances'));
+    assert.deepEqual(pub.json.insurances, []);
+    assert.equal(pub.json.insuranceCount, 2);
+    assert.ok(!pub.text.includes('응급손해보험'));
   });
 
   it('비상연락망 연락: 신고 생성, 보호자 2명 문자 대기, HttpOnly 세션 쿠키', async () => {
@@ -439,6 +501,23 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
     assert.equal((await call('GET', '/api/approvals/' + 'x'.repeat(43))).status, 404);
   });
 
+  it('대응 중 표시: 다른 보호자에게는 이름으로, 신고자에게는 대응 중 여부만', async () => {
+    const before = await call('GET', `/api/approvals/${approveTokens[0]}`);
+    assert.equal(before.json.alert.responding, null);
+    assert.equal((await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie })).json.guardianRespondingAt, null);
+
+    const mine = await call('POST', `/api/approvals/${approveTokens[0]}/respond`);
+    assert.equal(mine.status, 200);
+    assert.equal(mine.json.alert.responding.by, 'me');
+    const other = await call('GET', `/api/approvals/${approveTokens[1]}`);
+    assert.equal(other.json.alert.responding.by, 'other');
+    assert.equal(other.json.alert.responding.name, '엄마');
+    const rescuer = await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie });
+    assert.ok(rescuer.json.guardianRespondingAt);
+    assert.ok(!rescuer.text.includes('엄마'));
+    assert.equal((await call('POST', '/api/approvals/wrong-token/respond')).status, 404);
+  });
+
   it('승인되면 신고자에게 비공개 항목 공개, 공개 시간이 지나면 다시 잠김', async () => {
     const open = await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie });
     assert.equal(open.json.accessStatus, 'approved');
@@ -449,6 +528,14 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
       medications: '천식 흡입기 (살부타몰)',
       notes: '응급 시 천식 흡입기 사용이 필요합니다.',
     });
+    // 비공개 보험 목록도 승인되면 함께 보인다
+    assert.deepEqual(
+      open.json.insurances.map((i: { company: string; phone: string }) => [i.company, i.phone]),
+      [
+        ['응급손해보험', '1588-0000'],
+        ['실손생명', ''],
+      ],
+    );
 
     await pool.query(`UPDATE alerts SET approved_until = now() - interval '1 second' WHERE id = $1`, [alertId]);
     const closed = await call('GET', `/api/public/alerts/${alertId}`, { cookie: sessionCookie });
@@ -601,6 +688,67 @@ describe('API 통합 (DB)', { skip: DB_URL ? false : 'TEST_DATABASE_URL 미설�
       `SELECT count(*)::int AS n FROM sms_jobs WHERE phone = '01077770000' AND tag_id IS NOT NULL`,
     );
     assert.equal(rows[0]!.n, 1);
+  });
+
+  it('보호자·연락처 메모: 열람 요청은 보호자에게만, 연락하기는 보호자 아닌 연락처에게 위치 알림만', async () => {
+    // 앞 테스트에서 비활성·번호 변경·만료된 상태를 시연 가능하게 되돌린다
+    await call('PATCH', `/api/tags/${tagId}/active`, { token: owner, body: { isActive: true } });
+    await pool.query(`UPDATE alerts SET closed_at = now()`);
+    await pool.query(`UPDATE tag_contacts SET invite_status = 'accepted'`);
+    const put = await call('PUT', `/api/tags/${tagId}`, {
+      token: owner,
+      body: {
+        label: '키링',
+        personId,
+        defaultMessage: '긴급상황입니다',
+        contacts: [
+          { contactId: contactIds[0], isGuardian: true },
+          { contactId: contactIds[1], isGuardian: false, message: '회사면 엄마에게 연락해 주세요' },
+        ],
+      },
+    });
+    assert.equal(put.status, 200);
+    assert.deepEqual(
+      put.json.contacts.map((c: { isGuardian: boolean; message: string }) => [c.isGuardian, c.message]),
+      [
+        [true, ''],
+        [false, '회사면 엄마에게 연락해 주세요'],
+      ],
+    );
+    const pub = await call('GET', `/api/public/tags/${tagId}`);
+    assert.equal(pub.json.contactCount, 2);
+    assert.equal(pub.json.guardianCount, 1);
+
+    const jobsOf = async (id: string) =>
+      (await pool.query<{ phone: string; body: string }>('SELECT phone, body FROM sms_jobs WHERE alert_id = $1', [id])).rows;
+    const guardianPhone = (await pool.query<{ phone: string }>('SELECT phone FROM contacts WHERE id = $1', [contactIds[0]])).rows[0]!.phone;
+
+    // 1) 열람 요청: 보호자 1명에게만 (승인 링크 포함)
+    const req = await call('POST', `/api/public/tags/${tagId}/alerts`, { body: { action: 'requestAccess' } });
+    assert.equal(req.status, 201);
+    assert.equal(req.json.notifiedCount, 1);
+    const cookie = req.setCookie.split(';')[0]!;
+    let jobs = await jobsOf(req.json.alertId);
+    assert.deepEqual(jobs.map((j) => j.phone), [guardianPhone]);
+    assert.match(jobs[0]!.body, /\/a\//);
+
+    // 2) 이어서 연락하기: 아직 못 받은 보호자 아닌 연락처에게만 위치 알림 (승인 링크 없음, 등록자 메모 포함)
+    const contact = await call('POST', `/api/public/tags/${tagId}/alerts`, { cookie, body: { action: 'contact' } });
+    assert.equal(contact.json.notifiedCount, 1);
+    jobs = await jobsOf(req.json.alertId);
+    const other = jobs.find((j) => j.phone !== guardianPhone)!;
+    assert.ok(!other.body.includes('/a/'));
+    assert.match(other.body, /메모: 회사면 엄마에게 연락해 주세요/);
+
+    // 3) 보호자가 없으면 열람 요청 불가 (409)
+    await call('PUT', `/api/tags/${tagId}`, {
+      token: owner,
+      body: { label: '키링', personId, contacts: [{ contactId: contactIds[0], isGuardian: false }] },
+    });
+    await pool.query(`UPDATE alerts SET closed_at = now()`);
+    const none = await call('POST', `/api/public/tags/${tagId}/alerts`, { body: { action: 'requestAccess' } });
+    assert.equal(none.status, 409);
+    assert.equal(none.json.error.code, 'no_guardian');
   });
 
   it('게스트 계정 삭제: 구글 계정은 403, 게스트는 대상자·태그까지 모두 삭제', async () => {

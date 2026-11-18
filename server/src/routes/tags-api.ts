@@ -78,8 +78,10 @@ async function tagDetail(publicId: string, userId: string) {
     phone: string;
     invite_status: InviteStatus;
     invited_at: Date | null;
+    is_guardian: boolean;
+    message: string | null;
   }>(
-    `SELECT c.id, c.name, c.relation, c.phone, tc.invite_status, tc.invited_at
+    `SELECT c.id, c.name, c.relation, c.phone, tc.invite_status, tc.invited_at, tc.is_guardian, tc.message
      FROM tag_contacts tc JOIN contacts c ON c.id = tc.contact_id
      WHERE tc.tag_id = $1 ORDER BY tc.sort_order`,
     [tag.id],
@@ -94,6 +96,10 @@ async function tagDetail(publicId: string, userId: string) {
       /** pending: 수락 대기 (알림 안 감) / accepted: 수락 / declined: 거절 */
       inviteStatus: c.invite_status,
       invitedAt: c.invited_at?.toISOString() ?? null,
+      /** 보호자만 응급정보 열람 승인 링크를 받는다 */
+      isGuardian: c.is_guardian,
+      /** 이 연락처 문자에 함께 가는 등록자 메모 */
+      message: c.message ?? '',
     })),
   };
 }
@@ -102,12 +108,30 @@ const tagBody = z.object({
   label: z.string().trim().max(30).default(''),
   defaultMessage: z.string().trim().max(100).default(''),
   personId: z.uuid().nullable().default(null),
-  /** 주소록 연락처 ID, 순서대로 (최대 3명, 중복 불가) */
-  contactIds: z
-    .array(z.uuid())
-    .max(LIMITS.maxContactsPerTag, `연락처는 최대 ${LIMITS.maxContactsPerTag}명까지 선택할 수 있습니다.`)
-    .refine((ids) => new Set(ids).size === ids.length, '같은 연락처를 두 번 선택할 수 없습니다.')
-    .default([]),
+  /** 주소록 연락처 ID, 순서대로 (최대 3명, 중복 불가). contacts 를 보내면 무시 (이전 앱 호환) */
+  contactIds: z.array(z.uuid()).optional(),
+  /** 연락처별 보호자 여부·메모 (11/18) */
+  contacts: z
+    .array(
+      z.object({
+        contactId: z.uuid(),
+        /** 보호자만 응급정보 열람 승인 링크를 받는다 */
+        isGuardian: z.boolean().default(true),
+        /** 이 연락처 문자에 함께 보낼 등록자 메모 */
+        message: z.string().trim().max(100).default(''),
+      }),
+    )
+    .optional(),
+}).transform(({ contactIds, contacts, ...rest }) => ({
+  ...rest,
+  links: contacts ?? (contactIds ?? []).map((contactId) => ({ contactId, isGuardian: true, message: '' })),
+})).superRefine((body, ctx) => {
+  if (body.links.length > LIMITS.maxContactsPerTag) {
+    ctx.addIssue({ code: 'custom', message: `연락처는 최대 ${LIMITS.maxContactsPerTag}명까지 선택할 수 있습니다.` });
+  }
+  if (new Set(body.links.map((l) => l.contactId)).size !== body.links.length) {
+    ctx.addIssue({ code: 'custom', message: '같은 연락처를 두 번 선택할 수 없습니다.' });
+  }
 });
 
 const activeBody = z.object({ isActive: z.boolean() });
@@ -115,12 +139,13 @@ const activeBody = z.object({ isActive: z.boolean() });
 /** 대상자·연락처가 모두 이 사용자 것인지 확인하고 태그에 반영 */
 async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof tagBody>): Promise<void> {
   if (body.personId) await requireOwnedPerson(body.personId, userId);
-  if (body.contactIds.length > 0) {
+  const contactIds = body.links.map((l) => l.contactId);
+  if (contactIds.length > 0) {
     const { rows } = await getPool().query<{ n: number }>(
       'SELECT count(*)::int AS n FROM contacts WHERE id = ANY($1) AND user_id = $2',
-      [body.contactIds, userId],
+      [contactIds, userId],
     );
-    if (rows[0]?.n !== body.contactIds.length) {
+    if (rows[0]?.n !== contactIds.length) {
       throw ApiError.badRequest('주소록에 없는 연락처가 포함되어 있습니다.');
     }
   }
@@ -136,7 +161,7 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
     [tagId],
   );
   const kept = new Map(existing.map((row) => [row.contact_id, row]));
-  const added = body.contactIds.filter((id) => !kept.has(id));
+  const added = contactIds.filter((id) => !kept.has(id));
   if (added.length > 0 && (await countRecentInvites(getPool(), userId)) + added.length > LIMITS.contactInvitesPerUserPerDay) {
     throw ApiError.tooManyRequests(
       `비상연락처 수락 안내는 하루 ${LIMITS.contactInvitesPerUserPerDay}건까지 보낼 수 있습니다. 내일 다시 시도하세요.`,
@@ -149,11 +174,12 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
       [tagId, body.label, body.defaultMessage, body.personId],
     );
     await client.query('DELETE FROM tag_contacts WHERE tag_id = $1', [tagId]);
-    for (const [index, contactId] of body.contactIds.entries()) {
+    for (const [index, { contactId, isGuardian, message }] of body.links.entries()) {
       const prev = kept.get(contactId);
       await client.query(
-        `INSERT INTO tag_contacts (tag_id, contact_id, sort_order, invite_status, invite_token_hash, invited_at, responded_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO tag_contacts (tag_id, contact_id, sort_order, invite_status, invite_token_hash, invited_at, responded_at,
+                                   is_guardian, message)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           tagId,
           contactId,
@@ -162,6 +188,8 @@ async function applyTagBody(tagId: string, userId: string, body: z.infer<typeof 
           prev?.invite_token_hash ?? null,
           prev?.invited_at ?? null,
           prev?.responded_at ?? null,
+          isGuardian,
+          message || null,
         ],
       );
     }

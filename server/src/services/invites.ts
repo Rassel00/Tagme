@@ -14,7 +14,11 @@ export function inviteUrl(token: string): string {
 
 /** 이 연결을 수락 대기로 두고 새 링크로 안내 문자를 보낸다 (이전 링크는 무효) */
 export async function sendContactInvite(client: pg.PoolClient, tagId: string, contactId: string): Promise<void> {
-  const { rows } = await client.query<{ phone: string }>('SELECT phone FROM contacts WHERE id = $1', [contactId]);
+  const { rows } = await client.query<{ phone: string; is_guardian: boolean }>(
+    `SELECT c.phone, tc.is_guardian FROM contacts c JOIN tag_contacts tc ON tc.contact_id = c.id
+     WHERE c.id = $1 AND tc.tag_id = $2`,
+    [contactId, tagId],
+  );
   const phone = rows[0]?.phone;
   if (!phone) return;
   const token = generateToken();
@@ -27,7 +31,7 @@ export async function sendContactInvite(client: pg.PoolClient, tagId: string, co
   await client.query('INSERT INTO sms_jobs (tag_id, phone, body) VALUES ($1, $2, $3)', [
     tagId,
     phone,
-    renderInviteSms({ userName: person?.name ?? '', inviteUrl: inviteUrl(token) }),
+    renderInviteSms({ userName: person?.name ?? '', inviteUrl: inviteUrl(token), isGuardian: rows[0]?.is_guardian ?? true }),
   ]);
 }
 

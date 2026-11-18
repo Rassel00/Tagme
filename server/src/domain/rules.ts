@@ -1,7 +1,7 @@
 /**
  * 신고 처리 규칙 (개발 문서 7.1·7.2). DB 와 분리한 순수 함수라 단위 테스트로 검증한다.
  */
-import { LIMITS, PROFILE_FIELDS, type AccessStatus, type ProfileField } from './constants.js';
+import { LIMITS, PROFILE_FIELDS, type AccessStatus, type ProfileField, type PublicField } from './constants.js';
 
 const MINUTE = 60_000;
 
@@ -86,7 +86,7 @@ export function applyDecision(
 
 // ---------------------------------------------------------------- 응급정보 공개 범위
 
-export type ProfileRecord = Record<ProfileField, string> & { publicFields: ProfileField[] };
+export type ProfileRecord = Record<ProfileField, string> & { publicFields: PublicField[] };
 
 /** 공개 화면: 공개 항목은 값, 비공개 항목은 항목명만 (값이 있는 항목만) */
 export function toPublicView(profile: ProfileRecord | null): {
