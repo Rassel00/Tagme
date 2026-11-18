@@ -407,3 +407,37 @@ body.is-sub { background: var(--bg); }
   font-weight: 800;
   vertical-align: 1px;
 }
+
+/* ---------- 신고자 연락처 (WEB-05) ---------- */
+.rescuer { padding-bottom: 16px; }
+.rescuer-wrap { margin-top: 12px; }
+.card-title small { font-size: 14px; font-weight: 500; color: var(--text-3); }
+.rescuer-desc { margin: 0 0 14px; color: var(--text-2); font-size: 14px; }
+.rescuer-desc strong { color: var(--text); }
+.rescuer-status { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0 0; color: var(--text-2); font-size: 14px; }
+.rescuer-status svg { width: 20px; height: 20px; flex: none; color: var(--green); }
+.rescuer-status strong { color: var(--text); }
+.rescuer-waiting { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0 0; color: var(--text-2); font-size: 13px; }
+.rescuer-waiting .spinner { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+.rescuer-form { display: flex; gap: 8px; margin-top: 12px; }
+.rescuer-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 16px;
+}
+.rescuer-form input[aria-invalid="true"] { border-color: var(--red); }
+.rescuer-form .btn { flex: none; padding: 0 16px; }
+.rescuer-error { margin: 8px 0 0; color: var(--red-strong); font-size: 13px; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

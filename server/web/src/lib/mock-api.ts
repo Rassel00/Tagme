@@ -3,7 +3,7 @@
  * ?state=notfound | inactive | nocontact 로 예외 화면도 볼 수 있다.
  */
 import { distanceMeters } from './geo';
-import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types';
+import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag, RescuerPhoneResult } from './types';
 import { ApiRequestError } from './types';
 
 /** 위치 권한이 없을 때 데모에서 쓰는 기준 위치 (개발 문서 예시 좌표) */
@@ -18,6 +18,9 @@ const DEMO_AEDS: Omit<Aed, 'distanceM'>[] = [
 ];
 
 const AUTO_APPROVE_MS = 5000;
+/** 데모: 본인 확인 문자를 보낸 뒤 이만큼 지나면 인증된 것으로 처리 */
+const AUTO_VERIFY_MS = 4000;
+const DEMO_RESCUER_PHONE = '01098765432';
 const APPROVE_MINUTES = 30;
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -32,6 +35,7 @@ export function createMockApi(state: string | null): PublicApi {
 
   let alert: (AlertStatus & { id: string }) | undefined;
   let requestedAt = 0;
+  let verificationSentAt = 0;
 
   return {
     async getTag() {
@@ -44,7 +48,7 @@ export function createMockApi(state: string | null): PublicApi {
     async createAlert(action: AlertAction, _position: LatLng | null): Promise<CreateAlertResult> {
       await delay(500);
       const isMerged = alert !== undefined;
-      alert ??= { id: 'al_demo', accessStatus: 'none' };
+      alert ??= { id: 'al_demo', accessStatus: 'none', code: 'K4P9QZ', rescuerPhone: null, isRescuerVerified: false };
       if (action === 'requestAccess' && alert.accessStatus === 'none') {
         alert.accessStatus = 'requested';
         requestedAt = Date.now();
@@ -63,9 +67,26 @@ export function createMockApi(state: string | null): PublicApi {
       if (alert.accessStatus === 'approved' && alert.approvedUntil && Date.parse(alert.approvedUntil) <= Date.now()) {
         alert.accessStatus = 'expired';
       }
+      if (verificationSentAt && Date.now() - verificationSentAt > AUTO_VERIFY_MS) {
+        alert.rescuerPhone = DEMO_RESCUER_PHONE;
+        alert.isRescuerVerified = true;
+      }
+      const rescuer = { code: alert.code, rescuerPhone: alert.rescuerPhone, isRescuerVerified: alert.isRescuerVerified };
       return alert.accessStatus === 'approved'
-        ? { accessStatus: 'approved', approvedUntil: alert.approvedUntil, emergencyInfo: hidden }
-        : { accessStatus: alert.accessStatus };
+        ? { accessStatus: 'approved', approvedUntil: alert.approvedUntil, emergencyInfo: hidden, ...rescuer }
+        : { accessStatus: alert.accessStatus, ...rescuer };
+    },
+
+    async setRescuerPhone(_alertId: string, rescuerPhone: string): Promise<RescuerPhoneResult> {
+      await delay(300);
+      if (!alert) throw new ApiRequestError(403, 'session_required', '이 신고를 조회할 권한이 없습니다.');
+      if (alert.isRescuerVerified) throw new ApiRequestError(409, 'rescuer_verified', '이미 문자로 인증된 번호가 있습니다.');
+      alert.rescuerPhone = rescuerPhone.replace(/\D/g, '');
+      return { rescuerPhone: alert.rescuerPhone, isRescuerVerified: false };
+    },
+
+    simulateVerificationSms() {
+      verificationSentAt ||= Date.now();
     },
 
     async getAeds(position: LatLng, limit: number): Promise<Aed[]> {

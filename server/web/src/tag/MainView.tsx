@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Btn119, Hero, Notice, Sheet } from '../components/common';
 import { Icon } from '../components/Icon';
 import { errorMessage } from '../lib/format';
@@ -11,9 +11,12 @@ type ContactResult = { kind: 'success' | 'error'; title: string; description: st
 export function MainView({
   contactCount,
   onContact,
+  rescuerCard,
 }: {
   contactCount: number;
   onContact: (position: LatLng | null) => Promise<CreateAlertResult>;
+  /** 신고가 생긴 뒤 보이는 신고자 연락처 카드 (WEB-05) */
+  rescuerCard?: ReactNode;
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   /** 보내는 중 버튼에 보일 진행 문구 */
@@ -93,6 +96,8 @@ export function MainView({
           {result.description}
         </Notice>
       )}
+
+      {rescuerCard}
 
       <p className="footnote">
         <Icon name="warn" />

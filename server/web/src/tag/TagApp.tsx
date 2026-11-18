@@ -3,6 +3,7 @@
  * 화면: #(메인) / #info(응급정보) / #aed(주변 AED). 해시로 전환해 뒤로가기가 자연스럽게 동작한다.
  */
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { getPublicConfig } from '../lib/api';
 import { ErrorView, Loading } from '../components/common';
 import { IconSprite } from '../components/Icon';
 import { useHashRoute, useInterval } from '../hooks';
@@ -13,8 +14,11 @@ import { AedView } from './AedView';
 import { api, isAedOnly, readStoredAlertId, storeAlertId, tagId } from './context';
 import { InfoView } from './InfoView';
 import { MainView } from './MainView';
+import { RescuerCard } from './RescuerCard';
 
 const POLL_INTERVAL_MS = 3000;
+/** 본인 확인 문자를 기다리는 최대 시간. 넘으면 폴링을 멈춘다 (문자를 안 보냈을 수 있음) */
+const VERIFICATION_WAIT_MS = 5 * 60_000;
 
 type LoadState =
   | { kind: 'loading' }
@@ -40,6 +44,9 @@ export function TagApp() {
   const [alertId, setAlertId] = useState(readStoredAlertId);
   const [alert, setAlert] = useState<AlertStatus>();
   const [aedPosition, setAedPosition] = useState<LatLng>();
+  const [gatewayPhone, setGatewayPhone] = useState<string | null>(null);
+  /** [문자로 본인 확인]을 누른 시각. 인증되거나 시간이 지나면 undefined */
+  const [verificationStartedAt, setVerificationStartedAt] = useState<number>();
   const { route, goBack } = useHashRoute();
 
   /** 신고 상태 갱신. 세션 쿠키가 없거나(403) 신고가 종료됨(410) → 새 신고를 만들 수 있게 초기화 */
@@ -63,8 +70,21 @@ export function TagApp() {
     return result;
   }
 
+  async function setRescuerPhone(phone: string): Promise<void> {
+    if (!alertId) return;
+    try {
+      const result = await api.setRescuerPhone(alertId, phone);
+      setAlert((previous) => previous && { ...previous, ...result });
+    } catch (error) {
+      // 409: 그사이 문자로 인증됨 → 인증된 번호를 보여주도록 상태를 다시 가져온다
+      if (error instanceof ApiRequestError && error.status === 409) await refreshAlert();
+      throw error;
+    }
+  }
+
   // 태그 조회 (진행 중인 신고가 있으면 상태도 먼저 가져온다)
   useEffect(() => {
+    if (!isAedOnly && tagId) void getPublicConfig().then((c) => setGatewayPhone(c.gatewayPhone));
     if (isAedOnly) {
       document.title = '주변 AED 찾기 · TagMe';
       return;
@@ -85,15 +105,40 @@ export function TagApp() {
     };
   }, []);
 
-  // 승인 대기·공개 중·거절 상태면 3초마다 확인 (다른 보호자가 승인할 수 있음)
+  // 인증되면 본인 확인 대기를 끝낸다
+  useEffect(() => {
+    if (alert?.isRescuerVerified) setVerificationStartedAt(undefined);
+  }, [alert?.isRescuerVerified]);
+
+  // 승인 대기·공개 중·거절 상태면 3초마다 확인 (다른 보호자가 승인할 수 있음).
+  // 본인 확인 문자를 기다리는 동안에도 확인한다
   const status = alert?.accessStatus;
-  const shouldPoll = Boolean(alertId) && (status === 'requested' || status === 'approved' || status === 'denied');
+  const isAwaitingVerification = verificationStartedAt !== undefined;
+  const shouldPoll =
+    Boolean(alertId) && (status === 'requested' || status === 'approved' || status === 'denied' || isAwaitingVerification);
   useInterval(
     () => {
+      if (verificationStartedAt && Date.now() - verificationStartedAt > VERIFICATION_WAIT_MS) {
+        setVerificationStartedAt(undefined);
+      }
       if (!document.hidden) void refreshAlert();
     },
     shouldPoll ? POLL_INTERVAL_MS : null,
   );
+
+  const rescuerCard =
+    alertId && alert ? (
+      <RescuerCard
+        alert={alert}
+        gatewayPhone={gatewayPhone}
+        isAwaitingVerification={isAwaitingVerification}
+        onVerificationStarted={() => {
+          setVerificationStartedAt(Date.now());
+          api.simulateVerificationSms?.();
+        }}
+        onSavePhone={setRescuerPhone}
+      />
+    ) : null;
 
   const view = isAedOnly ? 'aed' : load.kind !== 'ready' ? load.kind : route === 'info' || route === 'aed' ? route : 'main';
 
@@ -119,11 +164,22 @@ export function TagApp() {
           const result = await createAlert('requestAccess', position);
           await refreshAlert(result.alertId);
         }}
-        onExpired={() => setAlert({ accessStatus: 'expired' })}
+        onExpired={() => setAlert((previous) => ({ ...previous, accessStatus: 'expired', approvedUntil: undefined, emergencyInfo: undefined }))}
+        rescuerCard={rescuerCard}
       />
     );
   } else {
-    content = <MainView contactCount={load.tag.contactCount} onContact={(position) => createAlert('contact', position)} />;
+    content = (
+      <MainView
+        contactCount={load.tag.contactCount}
+        onContact={async (position) => {
+          const result = await createAlert('contact', position);
+          await refreshAlert(result.alertId);
+          return result;
+        }}
+        rescuerCard={rescuerCard}
+      />
+    );
   }
 
   return (

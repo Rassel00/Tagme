@@ -1,4 +1,4 @@
-import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag } from './types';
+import type { Aed, AlertAction, AlertStatus, CreateAlertResult, LatLng, PublicApi, PublicTag, RescuerPhoneResult } from './types';
 import { ApiRequestError } from './types';
 import { createMockApi } from './mock-api';
 
@@ -38,6 +38,8 @@ function createHttpApi(tagId: string): PublicApi {
       request<AlertStatus>('GET', `/api/public/alerts/${encodeURIComponent(alertId)}`),
     getAeds: (position: LatLng, limit: number) =>
       request<Aed[]>('GET', `/api/public/aeds?lat=${position.lat}&lng=${position.lng}&limit=${limit}`),
+    setRescuerPhone: (alertId: string, rescuerPhone: string) =>
+      request<RescuerPhoneResult>('PATCH', `/api/public/alerts/${encodeURIComponent(alertId)}`, { rescuerPhone }),
   };
 }
 
@@ -48,13 +50,25 @@ export function createApi(tagId: string): PublicApi {
   return createHttpApi(tagId);
 }
 
-let kakaoKeyPromise: Promise<string | null> | undefined;
+export interface PublicConfig {
+  /** 카카오맵 JavaScript 키 */
+  kakaoJsKey: string | null;
+  /** 게이트웨이 폰 번호. 신고자 본인 확인 문자의 수신 번호 */
+  gatewayPhone: string | null;
+}
 
-/** 서버 설정의 카카오맵 JavaScript 키 (없거나 못 가져오면 null). 한 번만 요청한다 */
-export function getKakaoJsKey(): Promise<string | null> {
-  kakaoKeyPromise ??= fetch('/api/public/config', { cache: 'no-store' })
-    .then((r) => (r.ok ? (r.json() as Promise<{ kakaoJsKey?: string | null }>) : {}))
-    .then((c: { kakaoJsKey?: string | null }) => c.kakaoJsKey ?? null)
-    .catch(() => null);
-  return kakaoKeyPromise;
+let configPromise: Promise<PublicConfig> | undefined;
+
+/** 서버의 웹 공개 설정. 한 번만 요청하고, 못 가져오면 모두 null */
+export function getPublicConfig(): Promise<PublicConfig> {
+  configPromise ??= fetch('/api/public/config', { cache: 'no-store' })
+    .then((r) => (r.ok ? (r.json() as Promise<Partial<PublicConfig>>) : {}))
+    .then((c: Partial<PublicConfig>) => ({ kakaoJsKey: c.kakaoJsKey ?? null, gatewayPhone: c.gatewayPhone ?? null }))
+    .catch(() => ({ kakaoJsKey: null, gatewayPhone: null }));
+  return configPromise;
+}
+
+/** 카카오맵 JavaScript 키 (없으면 null) */
+export async function getKakaoJsKey(): Promise<string | null> {
+  return (await getPublicConfig()).kakaoJsKey;
 }
