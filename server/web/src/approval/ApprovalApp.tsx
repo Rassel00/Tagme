@@ -36,6 +36,8 @@ export function ApprovalApp() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isOptOutOpen, setIsOptOutOpen] = useState(false);
+  const [optOutNotice, setOptOutNotice] = useState<string>();
   const hasLoaded = useRef(false);
 
   async function refresh(): Promise<void> {
@@ -58,7 +60,7 @@ export function ApprovalApp() {
   // 다른 보호자의 결정·신고자의 열람 요청을 반영 (오류 화면이면 멈춤)
   useInterval(
     () => {
-      if (!document.hidden && !isSubmitting && !isDialogOpen && view) void refresh();
+      if (!document.hidden && !isSubmitting && !isDialogOpen && !isOptOutOpen && view) void refresh();
     },
     error ? null : POLL_INTERVAL_MS,
   );
@@ -79,6 +81,16 @@ export function ApprovalApp() {
     }
   }
 
+  async function optOut(): Promise<void> {
+    setOptOutNotice(undefined);
+    try {
+      setView(await api.optOut());
+    } catch (e) {
+      if (e instanceof ApiRequestError && (e.status === 404 || e.status === 410)) setError(e);
+      else setOptOutNotice(`알림을 해제하지 못했습니다. ${errorMessage(e)}`);
+    }
+  }
+
   let content;
   if (error) {
     const { title, description } = errorTexts(error);
@@ -96,6 +108,8 @@ export function ApprovalApp() {
         onApprove={() => setIsDialogOpen(true)}
         onDeny={() => void decide('deny')}
         onExpired={() => void refresh()}
+        optOutNotice={optOutNotice}
+        onOptOut={() => setIsOptOutOpen(true)}
       />
     );
   }
@@ -118,6 +132,17 @@ export function ApprovalApp() {
         description={`${view?.userName ?? ''}님의 비공개 응급정보를 이 신고를 한 사람에게 ${durationLabel(durationMinutes)} 동안 보여줍니다.`}
         confirmLabel="공개 승인"
       />
+      <Sheet
+        isOpen={isOptOutOpen}
+        onClose={(value) => {
+          setIsOptOutOpen(false);
+          if (value === 'confirm') void optOut();
+        }}
+        icon="warn"
+        title="이 태그 알림을 그만 받을까요?"
+        description={`${view?.userName ?? ''}님 태그로 신고가 접수돼도 이 번호로는 더 이상 문자가 오지 않습니다. 태그를 등록한 사람이 다시 추가하기 전까지 유지됩니다.`}
+        confirmLabel="알림 그만 받기"
+      />
     </>
   );
 }
@@ -131,6 +156,8 @@ function MainView({
   onApprove,
   onDeny,
   onExpired,
+  optOutNotice,
+  onOptOut,
 }: {
   view: ApprovalView;
   durationMinutes: number;
@@ -140,6 +167,8 @@ function MainView({
   onApprove: () => void;
   onDeny: () => void;
   onExpired: () => void;
+  optOutNotice?: string;
+  onOptOut: () => void;
 }) {
   const { alert } = view;
 
@@ -239,6 +268,23 @@ function MainView({
         <Icon name="lock" />
         승인하면 이 신고를 한 사람의 화면에서만, 정한 시간 동안 응급정보가 보입니다. 링크는 신고 후 24시간 동안 유효합니다.
       </p>
+
+      {/* 알림 그만 받기 (11/18): 주인이 관리할 수 없게 된 태그나 동의 없이 등록된 번호도 보호자가 직접 끊을 수 있게 */}
+      <div className="opt-out">
+        {view.isSubscribed ? (
+          <>
+            <p>이 사람을 모르거나 더 이상 알림을 받고 싶지 않다면</p>
+            <button type="button" className="btn btn-outline btn-block" onClick={onOptOut}>
+              이 태그 알림 그만 받기
+            </button>
+          </>
+        ) : (
+          <p className="opt-out-done">
+            <Icon name="check" />이 태그 알림을 해제했습니다. 이 번호로는 더 이상 문자가 오지 않습니다.
+          </p>
+        )}
+        {optOutNotice && <p className="opt-out-error">{optOutNotice}</p>}
+      </div>
     </section>
   );
 }

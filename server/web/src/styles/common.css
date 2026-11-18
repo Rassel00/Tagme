@@ -424,3 +424,11 @@ body.is-sub { background: var(--bg); }
   resize: none;
 }
 .sheet-field small { display: block; margin-top: 6px; color: var(--text-3); font-size: 13px; }
+
+/* ---------- 보호자 알림 그만 받기 ---------- */
+.opt-out { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); text-align: center; }
+.opt-out p { margin: 0 0 10px; color: var(--text-3); font-size: 13px; }
+.opt-out .btn { min-height: 44px; font-size: 14px; font-weight: 600; }
+.opt-out-done { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-2) !important; }
+.opt-out-done svg { width: 18px; height: 18px; flex: none; color: var(--green); }
+.opt-out-error { margin-top: 8px !important; color: var(--red-strong) !important; }

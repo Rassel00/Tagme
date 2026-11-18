@@ -24,6 +24,8 @@ export interface ApprovalView {
     decidedBy: 'me' | 'other' | null;
   };
   myDecision: 'approve' | 'deny' | null;
+  /** false 면 이 보호자는 이 태그 알림을 해제했다 */
+  isSubscribed: boolean;
   expiresAt: string;
   defaultDurationMinutes: number;
 }
@@ -36,6 +38,8 @@ export interface DecisionResult extends ApprovalView {
 export interface ApprovalApi {
   get(): Promise<ApprovalView>;
   decide(decision: 'approve' | 'deny', durationMinutes: number): Promise<DecisionResult>;
+  /** 이 태그의 알림 그만 받기 (태그 비상연락처에서 내 번호를 뺀다) */
+  optOut(): Promise<ApprovalView>;
 }
 
 export const DEMO_APPROVE_TOKEN = 'demo';
@@ -45,6 +49,7 @@ function createHttpApprovalApi(token: string): ApprovalApi {
   return {
     get: () => request<ApprovalView>('GET', url),
     decide: (decision, durationMinutes) => request<DecisionResult>('POST', url, { decision, durationMinutes }),
+    optOut: () => request<ApprovalView>('POST', `${url}/opt-out`),
   };
 }
 
@@ -68,6 +73,7 @@ function createMockApprovalApi(state: string | null): ApprovalApi {
       decidedBy: null,
     },
     myDecision: null,
+    isSubscribed: true,
     expiresAt: new Date(now + 24 * 3_600_000).toISOString(),
     defaultDurationMinutes: 30,
   };
@@ -85,6 +91,11 @@ function createMockApprovalApi(state: string | null): ApprovalApi {
       await delay(250);
       if (state === 'invalid') throw new ApiRequestError(404, 'approval_not_found', '승인 링크가 올바르지 않습니다.');
       if (state === 'expired') throw new ApiRequestError(410, 'approval_expired', '승인 링크가 만료되었습니다.');
+      return snapshot();
+    },
+    async optOut() {
+      await delay(300);
+      view.isSubscribed = false;
       return snapshot();
     },
     async decide(decision, durationMinutes) {

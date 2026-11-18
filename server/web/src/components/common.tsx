@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
 
 /** 큰 119 신고 버튼 */
@@ -104,6 +104,7 @@ export function Sheet({
   children?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -127,12 +128,12 @@ export function Sheet({
   }, []);
 
   return (
-    <dialog className="sheet" ref={ref} aria-labelledby="sheet-title">
+    <dialog className="sheet" ref={ref} aria-labelledby={titleId}>
       <form method="dialog">
         <div className={isGreen ? 'sheet-icon sheet-icon--green' : 'sheet-icon'} aria-hidden="true">
           <svg><use href={`#i-${icon}`} /></svg>
         </div>
-        <h2 id="sheet-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <p>{description}</p>
         {children}
         <div className="sheet-actions">
