@@ -1,59 +1,60 @@
-"""TagMe 앱 아이콘 생성 (방패 + 십자).
+"""TagMe 앱 아이콘 생성 (로그인 화면 로고와 같은 모양).
 
-빨간 배경에 흰 방패, 방패 안에 빨간 십자. 안드로이드 런처 아이콘 전부를 만든다.
+빨간 둥근 사각형 위에 흰 Material 아이콘 monitor_heart_rounded (lib/widgets/common.dart 의 AppLogo).
+11/19 에 방패+십자에서 로그인 화면 중앙 로고로 바꿨다. 안드로이드 런처 아이콘 전부를 만든다.
   - mipmap-*/ic_launcher.png            : 일반 아이콘 (둥근 사각형)
   - mipmap-*/ic_launcher_foreground.png : 적응형 아이콘 전경 (108dp, 가운데 66dp 안에 그림)
   - mipmap-*/ic_launcher_monochrome.png : Android 13 테마 아이콘
   - mipmap-anydpi-v26/ic_launcher.xml, values/ic_launcher_background.xml
   - assets/icon/tagme_icon_1024.png     : 원본 미리보기
 
+글리프는 Flutter SDK 에 들어 있는 Material Icons 폰트(Apache 2.0)에서 그린다.
+FLUTTER_ROOT 환경 변수가 없으면 PATH 의 flutter 위치에서 찾는다.
+
 실행: python tool/make_icon.py   (app/ 에서, Pillow 필요)
 """
 import os
+import shutil
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 RED = (229, 72, 77, 255)  # AppColors.red #E5484D
 WHITE = (255, 255, 255, 255)
 SS = 4  # 슈퍼샘플링 배율
+GLYPH = chr(0xF0354)  # Icons.monitor_heart_rounded
+GLYPH_RATIO = 0.58  # AppLogo: 아이콘 크기 = 사각형 크기 * 0.58
+
+
+def material_icons_font_path():
+    root = os.environ.get('FLUTTER_ROOT')
+    if not root:
+        exe = shutil.which('flutter') or shutil.which('flutter.bat')
+        if not exe:
+            raise SystemExit('Flutter SDK 를 찾지 못했어요. FLUTTER_ROOT 를 지정하세요.')
+        root = os.path.dirname(os.path.dirname(os.path.realpath(exe)))
+    path = os.path.join(root, 'bin', 'cache', 'artifacts', 'material_fonts', 'materialicons-regular.otf')
+    if not os.path.exists(path):
+        raise SystemExit(f'Material Icons 폰트가 없어요: {path} (flutter precache 실행)')
+    return path
+
+
+FONT_PATH = material_icons_font_path()
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RES = os.path.join(ROOT, 'android', 'app', 'src', 'main', 'res')
 DENSITIES = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
 
 
-def cubic(p0, p1, p2, p3, steps=48):
-    pts = []
-    for i in range(steps + 1):
-        t = i / steps
-        u = 1 - t
-        pts.append((
-            u**3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t**3 * p3[0],
-            u**3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t**3 * p3[1],
-        ))
-    return pts
-
-
-def shield_points():
-    """가운데 (0,0), 폭 1 기준 방패 외곽선 (위는 가운데가 살짝 솟고, 아래는 뾰족)"""
-    left = [(-0.44, -0.36)]
-    left += cubic((-0.44, -0.36), (-0.25, -0.38), (-0.12, -0.44), (0.0, -0.52))[1:]
-    right_top = cubic((0.0, -0.52), (0.12, -0.44), (0.25, -0.38), (0.44, -0.36))[1:]
-    right_side = cubic((0.44, -0.36), (0.44, 0.02), (0.38, 0.36), (0.0, 0.58))[1:]
-    left_side = cubic((0.0, 0.58), (-0.38, 0.36), (-0.44, 0.02), (-0.44, -0.36))[1:]
-    return left + right_top + right_side + left_side
-
-
-def draw_mark(draw, cx, cy, size, shield_fill, cross_fill):
-    """size: 방패 폭(px). 십자는 방패 위쪽 무게중심에 둔다"""
-    pts = [(cx + x * size, cy + y * size) for x, y in shield_points()]
-    draw.polygon(pts, fill=shield_fill)
-    arm = 0.40 * size  # 십자 전체 길이
-    bar = 0.14 * size  # 십자 두께
-    ccy = cy - 0.02 * size
-    r = bar * 0.22
-    draw.rounded_rectangle((cx - bar / 2, ccy - arm / 2, cx + bar / 2, ccy + arm / 2), r, fill=cross_fill)
-    draw.rounded_rectangle((cx - arm / 2, ccy - bar / 2, cx + arm / 2, ccy + bar / 2), r, fill=cross_fill)
+def draw_mark(img, cx, cy, size, color):
+    """size: 로고 사각형 한 변(px). 그 0.58 크기로 글리프를 가운데에 그린다"""
+    glyph_px = round(size * GLYPH_RATIO)
+    font = ImageFont.truetype(FONT_PATH, glyph_px)
+    layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    left, top, right, bottom = d.textbbox((0, 0), GLYPH, font=font)
+    # 아이콘 폰트는 em 상자 전체가 아이콘 영역이라, 그린 모양의 경계 상자로 가운데를 맞춘다
+    d.text((cx - (left + right) / 2, cy - (top + bottom) / 2), GLYPH, font=font, fill=color)
+    img.alpha_composite(layer)
 
 
 def render(px, kind):
@@ -62,18 +63,17 @@ def render(px, kind):
     d = ImageDraw.Draw(img)
     c = big / 2
     if kind == 'legacy':
-        # 런처가 모양을 씌우지 않는 예전 기기용: 여백 조금 둔 둥근 사각형
+        # 런처가 모양을 씌우지 않는 예전 기기용: 여백 조금 둔 둥근 사각형 (AppLogo 모서리 0.26)
         m = big * 0.06
-        d.rounded_rectangle((m, m, big - m, big - m), big * 0.2, fill=RED)
-        draw_mark(d, c, c + big * 0.01, big * 0.52, WHITE, RED)
-    elif kind == 'foreground':
-        # 108dp 캔버스, 안전 영역 66dp(61%) 안에 들어가게
-        draw_mark(d, c, c + big * 0.005, big * 0.48, WHITE, RED)
-    elif kind == 'monochrome':
-        draw_mark(d, c, c + big * 0.005, big * 0.48, WHITE, (0, 0, 0, 0))
+        side = big - 2 * m
+        d.rounded_rectangle((m, m, big - m, big - m), side * 0.26, fill=RED)
+        draw_mark(img, c, c, side, WHITE)
+    elif kind in ('foreground', 'monochrome'):
+        # 108dp 캔버스에서 런처가 보여 주는 영역은 가운데 72dp 정도. 그 영역을 로고 사각형으로 보고 글리프를 그린다
+        draw_mark(img, c, c, big * 72 / 108, WHITE)
     elif kind == 'preview':
-        d.rounded_rectangle((0, 0, big, big), big * 0.22, fill=RED)
-        draw_mark(d, c, c + big * 0.01, big * 0.56, WHITE, RED)
+        d.rounded_rectangle((0, 0, big, big), big * 0.26, fill=RED)
+        draw_mark(img, c, c, big, WHITE)
     return img.resize((px, px), Image.LANCZOS)
 
 
